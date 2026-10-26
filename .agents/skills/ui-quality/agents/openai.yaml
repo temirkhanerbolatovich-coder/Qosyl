@@ -1,0 +1,6 @@
+interface:
+  display_name: "Qosyl UI Quality"
+  short_description: "Audit Qosyl UI with accessible browser evidence"
+  default_prompt: "Use $ui-quality to audit the requested Qosyl screen and report verified findings before proposing changes."
+policy:
+  allow_implicit_invocation: true

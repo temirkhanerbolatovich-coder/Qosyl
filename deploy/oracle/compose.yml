@@ -1,0 +1,94 @@
+name: student-marketplace-pilot
+services:
+  db:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: marketplace_owner
+      POSTGRES_DB: student_marketplace
+      POSTGRES_PASSWORD: ${OWNER_DB_PASSWORD:?Set OWNER_DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - ./init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U marketplace_owner -d student_marketplace']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    image: student-marketplace-pilot:local
+    build: ../..
+    environment:
+      DATABASE_URL: postgresql://marketplace_owner:${OWNER_DB_PASSWORD}@db:5432/student_marketplace
+    command: [sh, -c, 'node node_modules/prisma/build/index.js migrate deploy && node scripts/lock-db-role.mjs']
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [database]
+    restart: 'no'
+
+  app:
+    image: student-marketplace-pilot:local
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://marketplace_app:${APP_DB_PASSWORD}@db:5432/student_marketplace
+      BETTER_AUTH_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+      LOCAL_DEV_MODE: 'false'
+      DEMO_ENABLED: 'false'
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:?Set SMTP_PORT}
+      SMTP_USER: ${SMTP_USER:?Set SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [edge, database]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 8s
+      start_period: 30s
+      retries: 3
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      PILOT_USER: ${PILOT_USER:?Set PILOT_USER}
+      PILOT_PASSWORD_HASH: ${PILOT_PASSWORD_HASH:?Set PILOT_PASSWORD_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      app: {condition: service_healthy}
+
+  dns:
+    profiles: [dynamic-dns]
+    image: node:24-bookworm-slim
+    restart: unless-stopped
+    environment:
+      DUCKDNS_SUBDOMAIN: ${DUCKDNS_SUBDOMAIN:-}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:-}
+      DUCKDNS_IPV4: ${DUCKDNS_IPV4:-}
+    volumes:
+      - ./duckdns-update.mjs:/updater/duckdns-update.mjs:ro
+    working_dir: /updater
+    command: [node, duckdns-update.mjs, --apply, --loop]
+    networks: [edge]
+
+networks:
+  edge:
+  database:
+    internal: true
+volumes:
+  pg_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,53 @@
+export const contentCategories = [
+  'hackathon',
+  'competition',
+  'internship',
+  'event',
+  'grant',
+  'scholarship',
+  'training',
+  'news',
+  'article',
+  'other',
+] as const;
+export const specialtyLabels = {
+  it: 'IT и цифровые технологии',
+  engineering: 'Инженерия и строительство',
+  business: 'Экономика, бизнес и право',
+  education: 'Педагогика',
+  health: 'Медицина и здоровье',
+  humanities: 'Языки, культура, дизайн и медиа',
+  agriculture: 'Сельское хозяйство',
+  services: 'Туризм и сервис',
+} as const;
+export const specialtyTerms: Record<keyof typeof specialtyLabels, string[]> = {
+  it: ['программ', 'разработ', 'цифров', 'coding', 'digital', 'хакатон'],
+  engineering: ['инженер', 'строител', 'технолог', 'energy', 'industry', 'physics', 'өнеркәсіп'],
+  business: ['эконом', 'бизнес', 'право', 'юрист', 'финанс', 'предприним', 'business', 'law'],
+  education: ['педагог', 'учител', 'образован', 'education', 'оқыт', 'мұғалім'],
+  health: ['медицин', 'здоров', 'врач', 'health', 'medicine', 'денсаулық'],
+  humanities: [
+    'культур',
+    'дизайн',
+    'медиа',
+    'язык',
+    'искусств',
+    'журналист',
+    'creative',
+    'culture',
+  ],
+  agriculture: ['аграр', 'сельск', 'биолог', 'эколог', 'agriculture', 'ауыл'],
+  services: ['туризм', 'сервис', 'гостиниц', 'tourism', 'hospitality', 'қызмет'],
+};
+export const opportunityCategoryLabels: Record<string, string> = {
+  hackathon: 'Хакатон',
+  competition: 'Конкурс',
+  internship: 'Стажировка / практика',
+  event: 'Мероприятие',
+  grant: 'Грант',
+  scholarship: 'Стипендия',
+  training: 'Обучение',
+  news: 'Новость',
+  article: 'Статья',
+  other: 'Требует классификации',
+};

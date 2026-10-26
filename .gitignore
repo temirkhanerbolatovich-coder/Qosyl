@@ -1,0 +1,27 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+!**/.env.production.example
+.local/
+playwright-report/
+test-results/
+coverage/
+*.log
+*.tsbuildinfo
+next-env.d.ts
+
+# Consolidated project materials; keep raw research and private archives local.
+02_Research/Inputs/
+02_Research/Corpus/
+99_Archive/
+**/__pycache__/
+
+# Local collection evidence and machine-specific research inventories.
+outputs/
+11_Reports/Audit_Reports/*.json
+11_Reports/Audit_Reports/*.csv
+11_Reports/Audit_Reports/git-status-*.txt
+02_Research/Analysis/source_manifest.json
+02_Research/Analysis/survey_counts.json

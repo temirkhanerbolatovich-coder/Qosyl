@@ -1,0 +1,22 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+}
+
+{$PUBLIC_HOST} {
+  encode zstd gzip
+  header -Server
+  # A separate gate restricts the initial pilot before application registration.
+  basic_auth {
+    {$PILOT_USER} {$PILOT_PASSWORD_HASH}
+  }
+  request_body {
+    max_size 128KB
+  }
+  reverse_proxy app:3000 {
+    # The app has no published port and only this proxy supplies the client address.
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Real-IP {remote_host}
+  }
+  # No access log: verification/reset links and cookies must not reach request logs.
+}

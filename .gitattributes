@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.png binary
+*.pdf binary
+*.xlsx binary
+# Keep the supplied document byte-for-byte, including its Windows line endings.
+docs/TZ_Codex_Student_Marketplace_MVP_v2.md -text whitespace=cr-at-eol

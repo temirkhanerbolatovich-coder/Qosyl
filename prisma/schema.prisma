@@ -1,0 +1,645 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProjectStatus {
+  draft
+  pending_moderation
+  published
+  paused
+  assigned
+  in_progress
+  submitted
+  changes_requested
+  accepted
+  completed
+  cancelled
+  disputed
+  expired
+}
+
+enum ApplicationStatus {
+  active
+  withdrawn
+  selected
+  not_selected
+}
+
+enum Visibility {
+  private
+  public
+  redacted_public
+}
+
+enum PaymentStatus {
+  not_reported
+  reported_paid_by_client
+  confirmed_received_by_student
+  disputed
+}
+
+enum PilotCostKind {
+  acquisition
+  moderation
+  support
+  operations
+}
+
+// Identity and authentication. Better Auth owns Session, Account, Verification and RateLimit.
+model User {
+  id                   String                  @id
+  name                 String
+  email                String                  @unique
+  emailVerified        Boolean                 @default(false)
+  image                String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  lastLoginAt          DateTime?
+  status               String                  @default("active")
+  statusReason         String?
+  roles                String[]                @default([])
+  demo                 Boolean                 @default(false)
+  adultConfirmedAt     DateTime?
+  termsAcceptedAt      DateTime?
+  sessions             Session[]
+  accounts             Account[]
+  studentProfile       StudentProfile?
+  clientProfile        ClientProfile?
+  externalWorks        ExternalPortfolioItem[]
+  clientProjects       Project[]               @relation("ClientProjects")
+  assignedProjects     Project[]               @relation("AssignedProjects")
+  applications         Application[]
+  submissions          Submission[]
+  projectEvents        ProjectEvent[]
+  reviewsWritten       Review[]                @relation("ReviewAuthor")
+  reviewsReceived      Review[]                @relation("ReviewRecipient")
+  reports              Report[]                @relation("ReportAuthor")
+  reportsAgainst       Report[]                @relation("ReportTarget")
+  notifications        Notification[]
+  moderation           ModerationAction[]
+  portfolio            PortfolioRecord[]
+  projectViews         ProjectView[]
+  pilotCostsRecorded   PilotCostEntry[]        @relation("PilotCostRecordedBy")
+  pilotCostsVoided     PilotCostEntry[]        @relation("PilotCostVoidedBy")
+  contentRunsRequested CrawlRun[]
+  contentAudits        ContentAudit[]
+  leadsCreated         Lead[]                  @relation("LeadCreator")
+  leadsAssigned        Lead[]                  @relation("LeadAssignee")
+  leadsOwned           Lead[]                  @relation("LeadClient")
+  leadEvents           LeadEvent[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+// Public/private profile data. Roles and account status remain on User.
+model StudentProfile {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio         String   @default("")
+  city        String   @default("")
+  institution String   @default("")
+  discipline  String   @default("")
+  weeklyHours Int      @default(5)
+  skills      String[] @default([])
+  formats     String[] @default(["remote"])
+  isPublic    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+}
+
+model ClientProfile {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  industry           String   @default("")
+  city               String   @default("")
+  contact            String   @default("")
+  description        String   @default("")
+  verificationStatus String   @default("pending")
+  verificationReason String?
+  updatedAt          DateTime @updatedAt
+}
+
+model ExternalPortfolioItem {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  url         String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Marketplace: Project is the aggregate root; Application belongs to one project and student.
+model Project {
+  id                      String                  @id @default(cuid())
+  clientId                String
+  client                  User                    @relation("ClientProjects", fields: [clientId], references: [id])
+  assignedStudentId       String?
+  assignedStudent         User?                   @relation("AssignedProjects", fields: [assignedStudentId], references: [id])
+  title                   String
+  category                String
+  problem                 String
+  description             String
+  deliverables            String
+  acceptanceCriteria      String[]
+  skills                  String[]                @default([])
+  difficulty              String                  @default("beginner_friendly")
+  mode                    String                  @default("remote")
+  city                    String                  @default("")
+  locationPrivate         String                  @default("")
+  contactPrivate          String                  @default("")
+  budgetKzt               Int
+  estimatedHours          Int
+  dueAt                   DateTime
+  preferredTime           String                  @default("")
+  status                  ProjectStatus           @default(draft)
+  demo                    Boolean                 @default(false)
+  demoApplicationsAllowed Boolean                 @default(false)
+  moderationReason        String?
+  publishedAt             DateTime?
+  expiresAt               DateTime?
+  clientClosedAt          DateTime?
+  studentClosedAt         DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  applications            Application[]
+  agreements              AgreementVersion[]
+  milestones              ProjectMilestone[]
+  submissions             Submission[]
+  events                  ProjectEvent[]
+  payment                 PaymentAcknowledgement?
+  reviews                 Review[]
+  portfolio               PortfolioRecord?
+  reports                 Report[]
+  views                   ProjectView[]
+  pilotCosts              PilotCostEntry[]
+  originatingLead         Lead?
+
+  @@unique([id, clientId])
+  @@index([status, dueAt, publishedAt])
+  @@index([category, mode, city])
+  @@index([clientId, updatedAt])
+  @@index([assignedStudentId, updatedAt])
+}
+
+model Application {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id])
+  studentId String
+  student   User              @relation(fields: [studentId], references: [id])
+  message   String
+  links     String[]          @default([])
+  status    ApplicationStatus @default(active)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  // SQL migration also enforces one selected application per project with a partial unique index.
+
+  @@unique([projectId, studentId])
+  @@index([studentId, status])
+  @@index([studentId, updatedAt])
+  @@index([projectId, createdAt])
+}
+
+// Execution history: versions, submissions and revisions are retained, not overwritten.
+model AgreementVersion {
+  id                String             @id @default(cuid())
+  projectId         String
+  project           Project            @relation(fields: [projectId], references: [id])
+  number            Int
+  snapshotJson      Json
+  clientApprovedAt  DateTime?
+  studentApprovedAt DateTime?
+  createdAt         DateTime           @default(now())
+  milestones        ProjectMilestone[]
+
+  @@unique([projectId, number])
+}
+
+model ProjectMilestone {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id])
+  title           String
+  done            Boolean          @default(false)
+  agreementNumber Int              @default(1)
+  agreement       AgreementVersion @relation(fields: [projectId, agreementNumber], references: [projectId, number], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([projectId, agreementNumber])
+}
+
+model Submission {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id])
+  studentId String
+  student   User              @relation(fields: [studentId], references: [id])
+  links     String[]
+  notes     String
+  createdAt DateTime          @default(now())
+  revisions RevisionRequest[]
+
+  @@index([projectId, createdAt])
+}
+
+model RevisionRequest {
+  id              String     @id @default(cuid())
+  submissionId    String
+  submission      Submission @relation(fields: [submissionId], references: [id])
+  notes           String
+  criteriaIndexes Int[]
+  createdAt       DateTime   @default(now())
+
+  @@index([submissionId])
+}
+
+model ProjectEvent {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  actorId      String?
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  action       String
+  metadataJson Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+// Payment claims are independent of acceptance and never represent custody or transfers.
+model PaymentAcknowledgement {
+  projectId         String        @id
+  project           Project       @relation(fields: [projectId], references: [id])
+  status            PaymentStatus @default(not_reported)
+  clientPaidAt      DateTime?
+  studentReceivedAt DateTime?
+  updatedAt         DateTime      @updatedAt
+}
+
+// Publication requires both consents in application projections; draft visibility alone grants no access.
+model PortfolioRecord {
+  id               String     @id @default(cuid())
+  projectId        String     @unique
+  project          Project    @relation(fields: [projectId], references: [id])
+  studentId        String
+  student          User       @relation(fields: [studentId], references: [id])
+  title            String
+  summary          String     @default("")
+  role             String     @default("")
+  skills           String[]   @default([])
+  publicLinks      String[]   @default([])
+  visibility       Visibility @default(private)
+  clientConsentAt  DateTime?
+  studentConsentAt DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([studentId, visibility])
+  @@index([studentId, createdAt])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  authorId    String
+  author      User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  recipientId String
+  recipient   User     @relation("ReviewRecipient", fields: [recipientId], references: [id])
+  rating      Int
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@unique([projectId, authorId])
+  @@index([recipientId, createdAt])
+}
+
+// Moderation, immutable audit trail and recipient-owned notifications.
+model Report {
+  id           String    @id @default(cuid())
+  authorId     String
+  author       User      @relation("ReportAuthor", fields: [authorId], references: [id])
+  projectId    String?
+  project      Project?  @relation(fields: [projectId], references: [id])
+  targetUserId String?
+  targetUser   User?     @relation("ReportTarget", fields: [targetUserId], references: [id])
+  reason       String
+  status       String    @default("open")
+  resolution   String?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  @@index([status, createdAt])
+}
+
+model ModerationAction {
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  targetId  String
+  action    String
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  text      String
+  url       String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  dedupeKey String?   @unique
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+// Finished background passes only. Automatic notification keys and run history are retained.
+model BackgroundJobRun {
+  id               String   @id @default(cuid())
+  job              String   @default("project-lifecycle")
+  status           String
+  startedAt        DateTime @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  finishedAt       DateTime
+  expiredProjects  Int      @default(0)
+  remindersCreated Int      @default(0)
+  scannedProjects  Int      @default(0)
+  errorCode        String?
+  nextCursor       String?
+
+  @@index([job, startedAt])
+}
+
+// Pilot measurement reuses existing account IDs; no IP addresses or browser identifiers.
+model ProjectView {
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  studentId     String
+  student       User     @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  firstViewedAt DateTime @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@id([projectId, studentId])
+  @@index([studentId])
+  @@index([firstViewedAt])
+}
+
+model PilotAnalyticsSettings {
+  id             String   @id
+  viewsStartedAt DateTime @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+}
+
+// Input fields are immutable; a mistaken cost can only be voided once, with its audit fields.
+model PilotCostEntry {
+  id             String        @id @default(cuid())
+  recordedById   String
+  recordedBy     User          @relation("PilotCostRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  kind           PilotCostKind
+  occurredAt     DateTime
+  minutes        Int
+  amountKzt      Int
+  description    String
+  idempotencyKey String
+  createdAt      DateTime      @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  voidedAt       DateTime?
+  voidedById     String?
+  voidedBy       User?         @relation("PilotCostVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  voidReason     String?
+
+  @@unique([recordedById, idempotencyKey])
+  @@index([occurredAt, id])
+  @@index([projectId])
+}
+
+// Private research remains separate from published opportunities and marketplace projects.
+model Lead {
+  id              String      @id @default(cuid())
+  kind            String
+  sourceUrl       String
+  urlHash         String
+  sourceName      String
+  title           String
+  summary         String
+  status          String      @default("new")
+  version         Int         @default(1)
+  createdById     String
+  createdBy       User        @relation("LeadCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  assignedToId    String
+  assignedTo      User        @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  verifiedAt      DateTime?
+  contactedAt     DateTime?
+  consentAt       DateTime?
+  consentEvidence String?
+  clientId        String?
+  client          User?       @relation("LeadClient", fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  projectId       String?     @unique
+  project         Project?    @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  conversionHash  String?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  updatedAt       DateTime    @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
+  events          LeadEvent[]
+
+  @@unique([kind, urlHash])
+  @@index([status, updatedAt, id])
+  @@index([assignedToId, status])
+  @@index([clientId, status, expiresAt])
+}
+
+model LeadEvent {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  actorId     String
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  version     Int
+  action      String
+  note        String
+  detailsJson Json     @default("{}")
+  createdAt   DateTime @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@unique([leadId, version])
+}
+
+model ContentModuleSettings {
+  id        String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
+}
+
+model ContentSource {
+  id                String         @id @default(cuid())
+  name              String
+  type              String
+  feedUrl           String?
+  allowedHost       String
+  enabled           Boolean        @default(false)
+  rightsNote        String
+  termsUrl          String?
+  intervalMinutes   Int            @default(360)
+  maxItems          Int            @default(50)
+  lastCheckedAt     DateTime?
+  lastSuccessAt     DateTime?
+  consecutiveErrors Int            @default(0)
+  nextRunAt         DateTime?
+  createdAt         DateTime       @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  updatedAt         DateTime       @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
+  items             ContentItem[]
+  runs              CrawlRun[]
+  audits            ContentAudit[]
+
+  @@index([enabled, nextRunAt])
+}
+
+model ContentItem {
+  id                 String            @id @default(cuid())
+  sourceId           String
+  source             ContentSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  externalId         String?
+  canonicalUrl       String
+  urlHash            String
+  status             String            @default("pending_review")
+  approvedRevisionId String?
+  approvedRevision   ContentRevision?  @relation("ApprovedContentRevision", fields: [approvedRevisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvedAt         DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime          @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  updatedAt          DateTime          @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
+  revisions          ContentRevision[] @relation("ContentRevisions")
+  audits             ContentAudit[]
+
+  @@unique([sourceId, externalId])
+  @@unique([sourceId, urlHash])
+  @@index([status, createdAt])
+  @@index([status, expiresAt, approvedAt])
+}
+
+model ContentRevision {
+  id             String         @id @default(cuid())
+  itemId         String
+  item           ContentItem    @relation("ContentRevisions", fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvedFor    ContentItem[]  @relation("ApprovedContentRevision")
+  canonicalUrl   String?
+  origin         String         @default("legacy")
+  audits         ContentAudit[]
+  number         Int
+  title          String
+  summary        String
+  category       String
+  geography      String         @default("")
+  language       String         @default("und")
+  publishedAt    DateTime?
+  publishedAtRaw String?
+  deadline       DateTime?
+  eventDate      DateTime?
+  score          Int
+  contentHash    String
+  createdAt      DateTime       @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@unique([itemId, number])
+  @@unique([itemId, id])
+  @@index([itemId, contentHash])
+}
+
+model CrawlRun {
+  id            String        @id @default(cuid())
+  sourceId      String
+  source        ContentSource @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status        String        @default("queued")
+  requestedById String?
+  requestedBy   User?         @relation(fields: [requestedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  requestedAt   DateTime      @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  leaseUntil    DateTime?
+  found         Int           @default(0)
+  created       Int           @default(0)
+  updated       Int           @default(0)
+  duplicates    Int           @default(0)
+  discarded     Int           @default(0)
+  errorCode     String?
+  httpStatus    Int?
+
+  @@index([status, requestedAt])
+  @@index([sourceId, requestedAt])
+}
+
+model ContentAudit {
+  id         String           @id @default(cuid())
+  actorId    String?
+  actor      User?            @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sourceId   String?
+  source     ContentSource?   @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  itemId     String?
+  item       ContentItem?     @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  revisionId String?
+  revision   ContentRevision? @relation(fields: [revisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  action     String
+  reason     String
+  createdAt  DateTime         @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@index([createdAt])
+  @@index([sourceId, createdAt])
+  @@index([itemId, createdAt])
+}

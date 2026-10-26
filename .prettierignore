@@ -1,0 +1,20 @@
+node_modules
+.next
+.local
+research
+test-results
+playwright-report
+docs/TZ_Codex_Student_Marketplace_MVP_v2.md
+package-lock.json
+
+# Consolidated project materials; keep raw research and private archives local.
+01_Project_Overview/
+02_Research/
+03_Product_Requirements/
+05_Modules/
+11_Reports/
+99_Archive/
+tools/
+
+# Generated from the canonical JSON token source.
+src/app/design-tokens.css

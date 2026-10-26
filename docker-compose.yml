@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: student_marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    ports:
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - marketplace_pg:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U marketplace -d student_marketplace']
+      interval: 5s
+      retries: 10
+volumes:
+  marketplace_pg:

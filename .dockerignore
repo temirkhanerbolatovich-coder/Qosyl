@@ -1,0 +1,22 @@
+.git
+node_modules
+.next
+.env
+.env.*
+.local
+research
+test-results
+playwright-report
+coverage
+*.pdf
+*.log
+docs/screenshots
+
+# Consolidated project materials; keep raw research and private archives local.
+01_Project_Overview/
+02_Research/
+03_Product_Requirements/
+05_Modules/
+11_Reports/
+99_Archive/
+tools/
