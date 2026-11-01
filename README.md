@@ -1,5 +1,7 @@
 # Qosyl
 
+**Размещённый сайт:** [qosyl.duckdns.org](https://qosyl.duckdns.org). Настройка DNS и ограничения — в [инструкции Oracle Cloud](docs/deployment/oracle-duckdns.md). Состояние исходников в этой ветке может отличаться от работающей версии сайта.
+
 [Дизайн-система Qosyl 1.0](docs/design-system.md): Deep Blue/Teal, локальные Inter/Manrope, светлая/тёмная/системная темы и исходный логотип. [Отчёт внедрения и проверки](docs/qa/design-system-implementation.md), [постоянная база UI Quality](docs/ui-quality/README.md).
 
 Общий поиск возможностей (26.10.2026): локальные HTML/RSS-источники, категории грантов/стипендий/стажировок, поиск и направления в admin и `/opportunities`. Собрано 109 реальных материалов из семи источников в закрытую очередь; автоматического одобрения нет. [Запуск, проверки и границы](docs/opportunity-discovery.md).

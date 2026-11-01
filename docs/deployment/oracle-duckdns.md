@@ -1,4 +1,31 @@
-# Oracle Cloud + DuckDNS: подготовка закрытого пилота
+# Oracle Cloud + DuckDNS: публичный пилот
+
+## Автоматическое обновление DNS — 01.11.2026
+
+Токен общего аккаунта DuckDNS перевыпущен; новые значения защищённо установлены на серверах Qosyl и Qutty Qonaq. Для Qosyl работает отдельный `qosyl-duckdns.timer`, который примерно каждые пять минут запускает `qosyl-duckdns.service`. Служба `/usr/local/sbin/qosyl-duckdns-update` обновляет только `qosyl.duckdns.org`, определяя IPv4 по исходящему запросу; после смены IP необходимы успешный запуск и истечение DNS-кэша. Таймер Qutty Qonaq обновляет только её адрес с другой машины.
+
+Ключ Qosyl хранится в `/etc/qosyl/duckdns-token` с правами root:root 600; это общий токен аккаунта, поэтому он позволяет менять и остальные его домены. Не включайте его в логи, репозиторий или сообщения. При следующем перевыпуске нужно одновременно обновить оба сервера. Прежняя отдельная настройка `assetguard-duckdns` относится к другому имени и осталась отключённой; её содержимое не менялось.
+
+После перевыпуска проверены успешный запуск обеих служб, включённые таймеры, независимые DNS-записи, HTTPS `/api/health` обоих сайтов и работа TimScheduleBot. Реальная смена IP и восстановление удалённой машины не проверялись. Если VM полностью недоступна, обновление DNS на ней не выполняется; при переносе нужно восстановить настройки или изменить запись вручную. Бесплатный DNS и виртуальная машина не гарантируют постоянной доступности.
+
+Восстановление после безопасного размещения токена на сервере:
+
+```sh
+sudo install -d -o root -g root -m 700 /etc/qosyl
+sudo install -o root -g root -m 700 deploy/oracle/qosyl-duckdns-update.py /usr/local/sbin/qosyl-duckdns-update
+sudo install -o root -g root -m 644 deploy/oracle/qosyl-duckdns.service deploy/oracle/qosyl-duckdns.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start qosyl-duckdns.service
+sudo systemctl enable --now qosyl-duckdns.timer
+systemctl show qosyl-duckdns.service -p Result -p ExecMainStatus
+systemctl list-timers qosyl-duckdns.timer --no-pager
+```
+
+Файл `deploy/oracle/duckdns-update.mjs`, описанный ниже, остаётся отдельным ручным инструментом со статическим IPv4 и не является запущенной службой автообновления.
+
+## Исторический план от 25.10.2026
+
+Следующий раздел описывает прежнее состояние до публикации сайта и не является текущей инструкцией.
 
 **Облако отложено решением владельца25.10.2026 до финансирования.** Текущая цель — локальная демонстрация по `../local-demo.md`. Ниже сохранены подготовленная конфигурация и история попыток; это не текущая задача на покупку/создание сервера.
 

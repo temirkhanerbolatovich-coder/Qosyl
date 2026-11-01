@@ -1,0 +1,8 @@
+[Unit]
+Description=Update Qosyl DuckDNS address
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/qosyl-duckdns-update
