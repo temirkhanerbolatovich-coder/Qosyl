@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { categories } from '../lib/validation';
+import { experiencesSchema } from '../lib/profile-details';
+import { profileLinksSchema } from '../lib/profile-links';
+import { hiddenProfileFieldsSchema } from '../lib/profile-visibility';
 
 /** JSON wire dates, after Response.json serializes Prisma Date values. */
 export const dateTimeSchema = z.iso.datetime({ offset: true });
@@ -47,6 +50,12 @@ export const publicUserSchema = demoPersonSchema.extend({
 export const studentProfileSchema = z.strictObject({
   userId: id,
   bio: text,
+  headline: text,
+  studyYear: z.number().int().min(1).max(8).nullable(),
+  languages: z.array(text),
+  experiences: experiencesSchema,
+  profileLinks: profileLinksSchema,
+  hiddenFields: hiddenProfileFieldsSchema,
   city: text,
   institution: text,
   discipline: text,
@@ -68,6 +77,17 @@ export const clientProfileSchema = z.strictObject({
   updatedAt: dateTimeSchema,
 });
 export const externalWorkSchema = z.strictObject({
+  role: text,
+  problem: text,
+  contribution: text,
+  period: text,
+  tools: z.array(text),
+  result: text,
+  links: z.array(text),
+  visibility: z.enum(['draft', 'private', 'public']),
+  publicationAllowed: z.boolean(),
+  position: z.number().int(),
+  revision: text,
   id,
   userId: id,
   title: text,

@@ -2,10 +2,16 @@ import 'server-only';
 
 import { betterAuth, getCurrentAdapter } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import {
+  APIError,
+  addOAuthServerContext,
+  createAuthMiddleware,
+  getOAuthState,
+} from 'better-auth/api';
 import { db } from '@/lib/db';
 import { config } from '@/lib/config';
 import { sendMail } from '@/lib/mail';
+import { authMailCopy, authMailLocale } from '@/lib/auth-mail-copy';
 
 export const auth = betterAuth({
   appName: config.productName,
@@ -14,6 +20,17 @@ export const auth = betterAuth({
   database: prismaAdapter(db, { provider: 'postgresql', transaction: true }),
   trustedOrigins: [config.baseUrl],
   disabledPaths: ['/update-user', '/change-email', '/delete-user'],
+  socialProviders:
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            disableImplicitSignUp: true,
+          },
+        }
+      : {},
+  account: { accountLinking: { enabled: false } },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 12,
@@ -22,11 +39,10 @@ export const auth = betterAuth({
     autoSignIn: config.localMode,
     revokeSessionsOnPasswordReset: true,
     resetPasswordTokenExpiresIn: 30 * 60,
-    sendResetPassword: async ({ user, url }) => {
+    sendResetPassword: async ({ user, url }, request) => {
       await sendMail({
         to: user.email,
-        subject: `${config.productName} — восстановление доступа`,
-        text: `Ссылка для смены пароля действует 30 минут: ${url}\nЕсли вы не запрашивали письмо, проигнорируйте его.`,
+        ...authMailCopy('reset', authMailLocale(request), config.productName, url),
       });
     },
   },
@@ -34,11 +50,10 @@ export const auth = betterAuth({
     sendOnSignUp: !config.localMode,
     autoSignInAfterVerification: true,
     expiresIn: 60 * 60,
-    sendVerificationEmail: async ({ user, url }) => {
+    sendVerificationEmail: async ({ user, url }, request) => {
       await sendMail({
         to: user.email,
-        subject: `${config.productName} — подтверждение email`,
-        text: `Подтвердите email по ссылке: ${url}\nСсылка действует один час.`,
+        ...authMailCopy('verification', authMailLocale(request), config.productName, url),
       });
     },
   },
@@ -89,6 +104,23 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === '/sign-in/social') {
+        if (ctx.body?.provider !== 'google' || ctx.body?.idToken) {
+          throw new APIError('BAD_REQUEST', { message: 'Unsupported sign-in method.' });
+        }
+        if (ctx.body?.requestSignUp === true) {
+          if (
+            ctx.body?.additionalData?.adultConfirmed !== true ||
+            ctx.body?.additionalData?.privacyConsent !== true
+          ) {
+            throw new APIError('BAD_REQUEST', {
+              message:
+                'Для участия в пилоте подтвердите возраст 18+ и согласие с условиями обработки данных.',
+            });
+          }
+          await addOAuthServerContext({ qosylConsent: true });
+        }
+      }
       if (ctx.path === '/sign-up/email') {
         if (ctx.body?.adultConfirmed !== true || ctx.body?.privacyConsent !== true) {
           throw new APIError('BAD_REQUEST', {
@@ -111,13 +143,16 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => ({
-          data: {
-            ...user,
-            adultConfirmedAt: new Date(),
-            termsAcceptedAt: new Date(),
-          },
-        }),
+        before: async (user, context) => {
+          const isEmailRegistration = context?.path === '/sign-up/email';
+          const isConfirmedGoogleRegistration =
+            context?.path === '/callback/:id' &&
+            context.params?.id === 'google' &&
+            (await getOAuthState())?.serverContext?.qosylConsent === true &&
+            user.emailVerified;
+          if (!isEmailRegistration && !isConfirmedGoogleRegistration) return false;
+          return { data: { ...user, adultConfirmedAt: new Date(), termsAcceptedAt: new Date() } };
+        },
         after: async (user) => {
           await db.moderationAction.create({
             data: {

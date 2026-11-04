@@ -5,6 +5,7 @@ import { mutationSchemas } from '@/lib/validation';
 import type { Tx } from '../shared';
 import { assert, requireState } from '@/lib/permissions';
 import { event, loadProject, participant } from '../shared';
+import { isPrivateAttachmentLink } from '@/lib/project-attachments';
 
 export async function portfolioCommands(
   tx: Tx,
@@ -47,6 +48,11 @@ export async function portfolioCommands(
         record.updatedAt.toISOString() === expectedUpdatedAt,
         409,
         'Запись портфолио изменилась. Проверьте содержание перед согласием.',
+      );
+      assert(
+        record.publicLinks.every((link) => !isPrivateAttachmentLink(link)),
+        409,
+        'Уберите ссылки на закрытые вложения перед публикацией портфолио.',
       );
       await tx.portfolioRecord.update({
         where: { projectId },

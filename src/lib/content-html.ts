@@ -12,10 +12,18 @@ export function parseHtmlOpportunities(
     throw new ContentFeedError('INVALID_ITEM_LIMIT');
   if (Buffer.byteLength(html, 'utf8') > 1_048_576) throw new ContentFeedError('FEED_TOO_LARGE');
   const $ = load(html);
+  const originalTitle =
+    $('article h1').first().text().trim() ||
+    $('main h1').first().text().trim() ||
+    $('meta[property="og:title"]').attr('content') ||
+    $('h1').first().text().trim();
   $('script,style,nav,header,footer,form,template,noscript').remove();
   const articlePage =
-    $('meta[property="og:type"]').attr('content') === 'article' || $('article h1').length > 0;
-  const pageTitle = $('article h1,main h1,h1').first().text().trim();
+    $('meta[property="og:type"]').attr('content') === 'article' ||
+    $('article h1').length > 0 ||
+    (allowedHost === 'q-university.edu.kz' &&
+      /^\/ru\/about\/news\/events\/[^/]+\/?$/.test(new URL(pageUrl).pathname));
+  const pageTitle = originalTitle || $('article h1,main h1,h1').first().text().trim();
   const pageSummary = $('article,main,#content,.content')
     .first()
     .text()
@@ -23,6 +31,25 @@ export function parseHtmlOpportunities(
     .trim();
   const pageDescription = $('meta[name="description"]').attr('content') || '';
   const language = $('html').attr('lang') || 'und';
+
+  // A verified article page is the material itself; related headings/buttons are not new items.
+  if (articlePage && pageTitle.length >= 10 && pageSummary.length >= 100) {
+    const summary = pageSummary.startsWith(pageTitle)
+      ? pageSummary.slice(pageTitle.length).trim()
+      : pageSummary;
+    const item = normalizeContentItem(
+      {
+        url: pageUrl,
+        title: pageTitle,
+        summary: summary || pageDescription,
+        language,
+        publishedAt: $('meta[property="article:published_time"]').attr('content'),
+      },
+      pageUrl,
+      allowedHost,
+    );
+    return { items: [item], found: 1, discarded: 0 };
+  }
 
   const candidates: {
     url: string;
@@ -51,6 +78,15 @@ export function parseHtmlOpportunities(
   }
   $('a[href]').each((_, element) => {
     const anchor = $(element);
+    // Hub profiles and pagination are not publications, even when styled as headings.
+    if (allowedHost === 'astanahub.com') {
+      try {
+        const path = new URL(anchor.attr('href') || '', pageUrl).pathname;
+        if (!/^\/(?:ru|en|kk)\/(?:article|event)\/[^/]+\/?$/.test(path)) return;
+      } catch {
+        return;
+      }
+    }
     const container = anchor.closest('article,.flownews,.news-item,.post');
     let withinListing = false;
     try {
@@ -96,13 +132,6 @@ export function parseHtmlOpportunities(
         (abaiTitle ? anchor.find('.cnews-date').text() : ''),
     });
   });
-  if (!candidates.length && articlePage && pageTitle.length >= 10 && pageSummary.length >= 100) {
-    candidates.push({
-      url: pageUrl,
-      title: pageTitle,
-      summary: pageDescription || pageSummary.slice(pageTitle.length).trim(),
-    });
-  }
   const items: NormalizedContentItem[] = [],
     seen = new Set<string>();
   let discarded = 0,
@@ -112,7 +141,11 @@ export function parseHtmlOpportunities(
       let item = normalizeContentItem({ ...candidate, language }, pageUrl, allowedHost);
       if (allowedHost === 'astanahub.com' && item.category === 'other')
         item = normalizeContentItem(
-          { ...candidate, language, category: 'event' },
+          {
+            ...candidate,
+            language,
+            category: new URL(item.canonicalUrl).pathname.includes('/event/') ? 'event' : 'article',
+          },
           pageUrl,
           allowedHost,
         );

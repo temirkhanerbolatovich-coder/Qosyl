@@ -1,5 +1,7 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
+import { useId, useState } from 'react';
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -23,8 +25,10 @@ import {
 } from './platform';
 import type { Project } from './types';
 import { LeadHandoffsPanel } from './lead-handoffs';
+import { NotificationLanguageSettings } from './notification-language-settings';
 
 function ProjectRow({ project, client = false }: { project: Project; client?: boolean }) {
+  const { locale, copy } = useMarketplaceCopy();
   const work = [
     'assigned',
     'in_progress',
@@ -37,13 +41,17 @@ function ProjectRow({ project, client = false }: { project: Project; client?: bo
   return (
     <article className="project-row">
       <div>
-        <Link className="row-title" href={`/projects/${project.id}`}>
+        <Link className="row-title" lang="und" href={`/projects/${project.id}`}>
           {project.title}
         </Link>
         <div className="row-meta">
-          <span>{money(project.budgetKzt)}</span>
-          <span>{project.estimatedHours} ч.</span>
-          <span>До {date(project.dueAt)}</span>
+          <span>{money(project.budgetKzt, locale)}</span>
+          <span>
+            {project.estimatedHours} {copy('ч.')}
+          </span>
+          <span>
+            {copy('До')} {date(project.dueAt, false, locale)}
+          </span>
           {project.demo && <DemoBadge />}
         </div>
       </div>
@@ -59,7 +67,11 @@ function ProjectRow({ project, client = false }: { project: Project; client?: bo
                 : `/projects/${project.id}`
           }
         >
-          {work ? 'К работе' : client && project.status === 'published' ? 'Отклики' : 'Открыть'}
+          {work
+            ? copy('К работе')
+            : client && project.status === 'published'
+              ? copy('Отклики')
+              : copy('Открыть')}
           <ArrowRight size={14} />
         </Link>
       </div>
@@ -71,9 +83,12 @@ export function DashboardScreen({
 }: {
   view?: 'overview' | 'applications' | 'studentProjects' | 'clientProjects';
 }) {
+  const { locale, copy } = useMarketplaceCopy();
   const viewer = useViewer();
   const { data, error, loading, refresh } = useData('dashboard');
   const action = useAction(refresh);
+  const notificationsId = useId();
+  const [allNotifications, setAllNotifications] = useState(false);
   const active =
     view === 'applications'
       ? '/student/applications'
@@ -84,18 +99,19 @@ export function DashboardScreen({
           : '/dashboard';
   if (loading && !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState />
       </div>
     );
   if (error || !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState error={error} retry={refresh} />
       </div>
     );
   const projects = data.projects ?? [];
   const applications = data.applications ?? [];
+  const notifications = data.notifications ?? [];
   const client =
     view === 'clientProjects' ||
     (view === 'overview' && !viewer?.roles.includes('student') && viewer?.roles.includes('client'));
@@ -106,45 +122,50 @@ export function DashboardScreen({
     ['assigned', 'in_progress', 'submitted', 'changes_requested'].includes(p.status),
   );
   const titles = {
-    overview: `Привет, ${data.user.name.split(' ')[0]}`,
-    applications: 'Мои отклики',
-    studentProjects: 'Мои проекты',
-    clientProjects: 'Мои заказы',
+    overview: `${copy('Привет,')} ${data.user.name.split(' ')[0]}`,
+    applications: copy('Мои отклики'),
+    studentProjects: copy('Мои проекты'),
+    clientProjects: copy('Мои заказы'),
   };
   return (
-    <div className="page-shell">
+    <div className="page-shell" lang={locale}>
       <PageHeading
-        eyebrow={client ? 'Кабинет заказчика' : 'Личный кабинет'}
+        eyebrow={client ? copy('Кабинет заказчика') : copy('Личный кабинет')}
         title={titles[view]}
         action={
           viewer?.roles.includes('client') ? (
             <Link className="button" href="/client/projects/new">
-              <Plus size={17} />
-              Разместить заказ
+              <Plus size={17} /> {copy('Разместить заказ')}
             </Link>
           ) : (
             <Link className="button" href="/projects">
-              Найти проект
-              <ArrowRight size={16} />
+              {copy('Найти проект')} <ArrowRight size={16} />
             </Link>
           )
         }
       >
         {view === 'applications'
-          ? 'Здесь видно, что происходит с каждым откликом. До выбора исполнителя сообщение можно изменить.'
+          ? copy(
+              'Здесь видно, что происходит с каждым откликом. До выбора исполнителя сообщение можно изменить.',
+            )
           : view === 'overview'
-            ? 'Всё, что важно для следующего шага: проекты, отклики и решения заказчиков.'
-            : 'От согласования условий до подтверждённого результата.'}
+            ? copy('Всё, что важно для следующего шага: проекты, отклики и решения заказчиков.')
+            : copy('От согласования условий до подтверждённого результата.')}
       </PageHeading>
       <WorkspaceNav active={active} />
+      <p>
+        <Link href="/opportunities/saved" className="text-link">
+          {copy('Моё избранное и поиски возможностей →')}
+        </Link>
+      </p>
       {view === 'clientProjects' && <LeadHandoffsPanel />}
       <ActionFeedback error={action.error} success={action.success} />
       {!data.user.roles.length && (
         <div className="alert">
           <span>
-            Сначала выберите роль и заполните базовый профиль.{' '}
+            {copy('Сначала выберите роль и заполните базовый профиль.')}{' '}
             <Link className="text-link" href="/onboarding">
-              Начать →
+              {copy('Начать →')}
             </Link>
           </span>
         </div>
@@ -154,7 +175,7 @@ export function DashboardScreen({
           <div className="summary-card">
             <div>
               <strong>{inProgress.length}</strong>
-              <p>Проектов требуют внимания</p>
+              <p>{copy('Проектов требуют внимания')}</p>
             </div>
             <span className="summary-icon">
               <BriefcaseBusiness size={19} />
@@ -167,7 +188,7 @@ export function DashboardScreen({
                   ? ownProjects.filter((p) => p.status === 'published').length
                   : applications.filter((a) => a.status === 'active').length}
               </strong>
-              <p>{client ? 'Опубликованных заказов' : 'Откликов на рассмотрении'}</p>
+              <p>{client ? copy('Опубликованных заказов') : copy('Откликов на рассмотрении')}</p>
             </div>
             <span className="summary-icon">
               <MessageSquare size={19} />
@@ -176,7 +197,7 @@ export function DashboardScreen({
           <div className="summary-card">
             <div>
               <strong>{ownProjects.filter((p) => p.status === 'completed').length}</strong>
-              <p>Заказов закрыто обеими сторонами</p>
+              <p>{copy('Заказов закрыто обеими сторонами')}</p>
             </div>
             <span className="summary-icon">
               <CheckCircle2 size={19} />
@@ -190,14 +211,20 @@ export function DashboardScreen({
             {applications.map((a) => (
               <article className="project-row" key={a.id}>
                 <div>
-                  <Link className="row-title" href={`/projects/${a.projectId}`}>
-                    {a.project?.title ?? 'Заказ'}
+                  <Link
+                    className="row-title"
+                    lang={a.project?.title ? 'und' : locale}
+                    href={`/projects/${a.projectId}`}
+                  >
+                    {a.project?.title ?? copy('Заказ')}
                   </Link>
-                  <p className="muted small-text pre-wrap" style={{ margin: '8px 0' }}>
+                  <p className="muted small-text pre-wrap" lang="und" style={{ margin: '8px 0' }}>
                     {a.message}
                   </p>
                   <div className="row-meta">
-                    <span>Отправлен {date(a.createdAt)}</span>
+                    <span>
+                      {copy('Отправлен')} {date(a.createdAt, false, locale)}
+                    </span>
                     {a.project?.demo && <DemoBadge />}
                   </div>
                 </div>
@@ -209,15 +236,19 @@ export function DashboardScreen({
                       a.status === 'selected' ? `/work/${a.projectId}` : `/projects/${a.projectId}`
                     }
                   >
-                    {a.status === 'selected' ? 'К работе' : 'Подробнее'}
+                    {a.status === 'selected' ? copy('К работе') : copy('Подробнее')}
                   </Link>
                 </div>
               </article>
             ))}
           </section>
         ) : (
-          <EmptyState title="Начните с первого отклика" href="/projects" action="Выбрать проект">
-            Длинное резюме не нужно. Расскажите, чем можете помочь с конкретной задачей.
+          <EmptyState
+            title={copy('Начните с первого отклика')}
+            href="/projects"
+            action={copy('Выбрать проект')}
+          >
+            {copy('Длинное резюме не нужно. Расскажите, чем можете помочь с конкретной задачей.')}
           </EmptyState>
         )
       ) : (
@@ -226,17 +257,17 @@ export function DashboardScreen({
             <div className="section-title">
               <h2>
                 {view === 'overview'
-                  ? 'Текущие проекты'
+                  ? copy('Текущие проекты')
                   : client
-                    ? 'Все ваши заказы'
-                    : 'Выбранные проекты'}
+                    ? copy('Все ваши заказы')
+                    : copy('Выбранные проекты')}
               </h2>
               {view === 'overview' && (
                 <Link
                   className="text-link small-text"
                   href={client ? '/client/projects' : '/student/projects'}
                 >
-                  Все →
+                  {copy('Все →')}
                 </Link>
               )}
             </div>
@@ -248,32 +279,42 @@ export function DashboardScreen({
               </div>
             ) : (
               <EmptyState
-                title={client ? 'Дайте идее конкретную задачу' : 'Здесь будет ваша первая работа'}
+                title={
+                  client
+                    ? copy('Дайте идее конкретную задачу')
+                    : copy('Здесь будет ваша первая работа')
+                }
                 href={client ? '/client/projects/new' : '/projects'}
-                action={client ? 'Создать заказ' : 'Посмотреть проекты'}
+                action={client ? copy('Создать заказ') : copy('Посмотреть проекты')}
               >
                 {client
-                  ? 'Укажите бюджет, результат и критерии приёмки. После модерации студенты смогут откликнуться.'
-                  : 'Откликнитесь на проект. После выбора заказчиком здесь появятся условия и рабочая область.'}
+                  ? copy(
+                      'Укажите бюджет, результат и критерии приёмки. После модерации студенты смогут откликнуться.',
+                    )
+                  : copy(
+                      'Откликнитесь на проект. После выбора заказчиком здесь появятся условия и рабочая область.',
+                    )}
               </EmptyState>
             )}
             {view === 'overview' && !client && (data.portfolio ?? []).length > 0 && (
               <section className="panel" style={{ marginTop: 22 }}>
-                <h2>Подтверждённое портфолио</h2>
+                <h2>{copy('Подтверждённое портфолио')}</h2>
                 {data.portfolio.map((item) => (
                   <article className="project-row" key={item.id}>
                     <div>
-                      <strong className="row-title">{item.title}</strong>
+                      <strong className="row-title" lang="und">
+                        {item.title}
+                      </strong>
                       <p className="muted small-text" style={{ margin: '6px 0 0' }}>
                         {item.visibility === 'private'
-                          ? 'Приватная запись'
+                          ? copy('Приватная запись')
                           : item.clientConsentAt && item.studentConsentAt
-                            ? 'Видимость согласована обеими сторонами'
-                            : 'Ожидает согласования публичной видимости'}
+                            ? copy('Видимость согласована обеими сторонами')
+                            : copy('Ожидает согласования публичной видимости')}
                       </p>
                     </div>
                     <Link className="text-link small-text" href={`/work/${item.projectId}`}>
-                      Настроить →
+                      {copy('Настроить →')}
                     </Link>
                   </article>
                 ))}
@@ -282,52 +323,75 @@ export function DashboardScreen({
           </section>
           {view === 'overview' && (
             <aside>
-              <section className="panel">
+              <section className="panel" aria-label={copy('Уведомления')}>
                 <div className="section-title">
-                  <h2 style={{ fontSize: 18 }}>Уведомления</h2>
+                  <h2 style={{ fontSize: 18 }}>{copy('Уведомления')}</h2>
                   <FileText size={17} className="muted" />
                 </div>
-                {(data.notifications ?? []).length ? (
-                  data.notifications.slice(0, 8).map((n) => (
-                    <article className={`notification ${!n.readAt ? 'unread' : ''}`} key={n.id}>
-                      <p>{n.text}</p>
-                      <div className="button-row">
-                        <time>{date(n.createdAt, true)}</time>
-                        {n.url && (
-                          <Link className="text-link small-text" href={n.url}>
-                            Открыть
-                          </Link>
-                        )}
-                        {!n.readAt && (
-                          <button
-                            className="text-link small-text"
-                            style={{ border: 0, background: 'none', padding: 0 }}
-                            disabled={action.busy}
-                            onClick={() =>
-                              action.run('markNotification', { notificationId: n.id }, '')
-                            }
-                          >
-                            Прочитано
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <p className="muted small-text" style={{ margin: 0 }}>
-                    Важные решения и изменения появятся здесь.
-                  </p>
+                <p className="muted small-text">
+                  {copy('Здесь доступны последние 30 уведомлений.')}
+                </p>
+                <NotificationLanguageSettings />
+                <div id={notificationsId}>
+                  {notifications.length ? (
+                    notifications.slice(0, allNotifications ? notifications.length : 8).map((n) => (
+                      <article className={`notification ${!n.readAt ? 'unread' : ''}`} key={n.id}>
+                        <p lang="und">{n.text}</p>
+                        <div className="button-row">
+                          <time>{date(n.createdAt, true, locale)}</time>
+                          {n.url && (
+                            <Link className="text-link small-text" href={n.url}>
+                              {copy('Открыть')}
+                            </Link>
+                          )}
+                          {!n.readAt && (
+                            <button
+                              className="text-link small-text"
+                              style={{ border: 0, background: 'none', padding: 0 }}
+                              disabled={action.busy}
+                              onClick={() =>
+                                action.run('markNotification', { notificationId: n.id }, '')
+                              }
+                            >
+                              {copy('Прочитано')}
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="muted small-text" style={{ margin: 0 }}>
+                      {copy('Важные решения и изменения появятся здесь.')}
+                    </p>
+                  )}
+                </div>
+                {notifications.length > 8 && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    aria-expanded={allNotifications}
+                    aria-controls={notificationsId}
+                    onClick={() => setAllNotifications((current) => !current)}
+                  >
+                    {allNotifications
+                      ? copy('Свернуть уведомления')
+                      : `${copy('Показать все загруженные уведомления')} (${notifications.length})`}
+                  </button>
                 )}
               </section>
               <section className="panel">
-                <h2 style={{ fontSize: 18 }}>Следующий шаг</h2>
+                <h2 style={{ fontSize: 18 }}>{copy('Следующий шаг')}</h2>
                 <p className="small-text muted">
                   {client
-                    ? 'Хорошая задача — это ограниченный объём, понятный результат и честные условия.'
-                    : 'Добавьте навыки и удобный формат работы. Опыт и отзывы не обязательны для первого отклика.'}
+                    ? copy(
+                        'Хорошая задача — это ограниченный объём, понятный результат и честные условия.',
+                      )
+                    : copy(
+                        'Добавьте навыки и удобный формат работы. Опыт и отзывы не обязательны для первого отклика.',
+                      )}
                 </p>
                 <Link className="text-link small-text" href={client ? '/help' : '/student/profile'}>
-                  {client ? 'Памятка заказчику' : 'Заполнить профиль'} →
+                  {client ? copy('Памятка заказчику') : copy('Заполнить профиль')} →
                 </Link>
               </section>
             </aside>

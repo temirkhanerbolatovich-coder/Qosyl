@@ -6,6 +6,8 @@ import type { Tx } from '../shared';
 import { config } from '@/lib/config';
 import { assert, requireRole, requireState } from '@/lib/permissions';
 import { event, notify, loadProject, client, snapshot, rate } from '../shared';
+import { getNotificationLanguage } from '@/server/notification-language';
+import { notificationText } from '@/lib/notification-language';
 
 export async function applicationsCommands(
   tx: Tx,
@@ -52,7 +54,10 @@ export async function applicationsCommands(
       await tx.notification.create({
         data: {
           userId: project.clientId,
-          text: 'Новый отклик на заказ.',
+          text: notificationText(
+            await getNotificationLanguage(tx, project.clientId),
+            'Новый отклик на заказ.',
+          ),
           url: `/client/projects/${projectId}/applications`,
         },
       });
@@ -139,7 +144,10 @@ export async function applicationsCommands(
         await tx.notification.create({
           data: {
             userId: other.studentId,
-            text: 'По вашему отклику выбран другой исполнитель.',
+            text: notificationText(
+              await getNotificationLanguage(tx, other.studentId),
+              'По вашему отклику выбран другой исполнитель.',
+            ),
             url: '/student/applications',
           },
         });

@@ -1,3 +1,4 @@
+import { caseOrder } from '@/lib/portfolio-case';
 import 'server-only';
 
 import { headers } from 'next/headers';
@@ -15,7 +16,7 @@ export async function getCurrentUser() {
     include: {
       studentProfile: true,
       clientProfile: true,
-      externalWorks: { orderBy: { createdAt: 'desc' } },
+      externalWorks: { orderBy: caseOrder },
     },
   });
   return user?.status === 'active' && (!user.demo || config.demoEnabled) ? user : null;

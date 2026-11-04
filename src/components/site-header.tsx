@@ -2,10 +2,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowUpRight, LogOut, Menu, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ArrowUpRight, LogOut } from 'lucide-react';
+import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { ThemeSwitch } from './theme-switch';
+import { LocaleSwitch, useI18n } from './locale-provider';
 import type { Viewer } from './types';
 
 export function SiteHeader({
@@ -15,13 +16,13 @@ export function SiteHeader({
   viewer: Viewer | null;
   productName: string;
 }) {
+  const { locale, t } = useI18n();
   const words = productName.split(' ');
   const brandTop = words.length > 1 ? words.slice(0, -1).join(' ') : productName;
-  const brandBottom = words.length > 1 ? words.at(-1) : 'Студенческие проекты';
+  const brandBottom =
+    words.length > 1 ? words.at(-1) : t('Студенческие проекты', 'Студенттік жобалар');
   const path = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const menuButton = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   async function signOut() {
     setBusy(true);
@@ -34,8 +35,8 @@ export function SiteHeader({
     }
   }
   return (
-    <header className="site-header">
-      <div className="container header-inner">
+    <header className="site-header qosyl-header" lang={locale}>
+      <div className="container qosyl-header-inner" id="header-navigation">
         <Link href="/" className="brand">
           <Image
             className="brand-logo"
@@ -50,98 +51,65 @@ export function SiteHeader({
             <span>{brandBottom}</span>
           </span>
         </Link>
-        <button
-          className="icon-button mobile-menu"
-          ref={menuButton}
-          aria-controls="header-navigation"
-          aria-label={open ? 'Закрыть меню' : 'Открыть меню'}
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          {open ? <X /> : <Menu />}
-        </button>
-        <div
-          id="header-navigation"
-          className={`header-content ${open ? 'is-open' : ''}`}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && open) {
-              event.preventDefault();
-              setOpen(false);
-              menuButton.current?.focus();
-            }
-          }}
-        >
-          <nav className="main-nav" aria-label="Основная навигация">
-            <Link
-              onClick={() => setOpen(false)}
-              className={path.startsWith('/projects') ? 'active' : ''}
-              href="/projects"
-            >
-              Найти проект
+        <nav className="qosyl-nav" aria-label={t('Основная навигация', 'Негізгі навигация')}>
+          <Link href="/projects" aria-current={path.startsWith('/projects') ? 'page' : undefined}>
+            {t('Проекты', 'Жобалар')}
+          </Link>
+          <Link
+            href="/opportunities"
+            aria-current={path.startsWith('/opportunities') ? 'page' : undefined}
+          >
+            {t('Возможности', 'Мүмкіндіктер')}
+          </Link>
+          <Link href="/help" aria-current={path === '/help' ? 'page' : undefined}>
+            {t('Как это работает', 'Қалай жұмыс істейді')}
+          </Link>
+          {viewer && (
+            <Link href="/dashboard" aria-current={path === '/dashboard' ? 'page' : undefined}>
+              {t('Мой кабинет', 'Жеке кабинетім')}
             </Link>
-            <Link
-              onClick={() => setOpen(false)}
-              className={path === '/help' ? 'active' : ''}
-              href="/help"
-            >
-              Как это работает
-            </Link>
-            <Link
-              href="/opportunities"
-              onClick={() => setOpen(false)}
-              className={path === '/opportunities' ? 'active' : ''}
-            >
-              Возможности
-            </Link>
-            {viewer && (
+          )}
+        </nav>
+        <div className="qosyl-header-actions">
+          <ThemeSwitch />
+          <LocaleSwitch />
+          {viewer ? (
+            <>
               <Link
-                onClick={() => setOpen(false)}
-                className={path === '/dashboard' ? 'active' : ''}
-                href="/dashboard"
+                href="/onboarding"
+                className="account-link"
               >
-                Мой кабинет
+                <span className="avatar" aria-hidden="true">
+                  {viewer.name.slice(0, 1)}
+                </span>
+                <span lang="und">{viewer.name.split(' ')[0]}</span>
               </Link>
-            )}
-          </nav>
-          <div className="header-actions">
-            <ThemeSwitch />
-            {viewer ? (
-              <>
-                <Link href="/onboarding" className="account-link">
-                  <span className="avatar">{viewer.name.slice(0, 1)}</span>
-                  <span>{viewer.name.split(' ')[0]}</span>
-                </Link>
-                <button
-                  className="icon-button"
-                  onClick={signOut}
-                  disabled={busy}
-                  aria-label="Выйти"
-                >
-                  <LogOut size={17} />
-                </button>
-                {viewer.roles.includes('client') && (
-                  <Link
-                    onClick={() => setOpen(false)}
-                    className="button small"
-                    href="/client/projects/new"
-                  >
-                    Разместить заказ
-                    <ArrowUpRight size={15} />
-                  </Link>
-                )}
-              </>
-            ) : (
-              <>
-                <Link onClick={() => setOpen(false)} className="login-link" href="/auth/login">
-                  Войти
-                </Link>
-                <Link onClick={() => setOpen(false)} className="button small" href="/auth/register">
-                  Начать
+              <button
+                className="icon-button"
+                onClick={signOut}
+                disabled={busy}
+                aria-label={t('Выйти', 'Шығу')}
+              >
+                <LogOut size={17} />
+              </button>
+              {viewer.roles.includes('client') && (
+                <Link className="button small" href="/client/projects/new">
+                  {t('Разместить заказ', 'Тапсырыс жариялау')}
                   <ArrowUpRight size={15} />
                 </Link>
-              </>
-            )}
-          </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Link className="login-link" href="/auth/login">
+                {t('Войти', 'Кіру')}
+              </Link>
+              <Link className="button small" href="/auth/register">
+                {t('Начать', 'Бастау')}
+                <ArrowUpRight size={15} />
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

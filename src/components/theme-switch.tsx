@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { useI18n } from './locale-provider';
 import {
   parseThemePreference,
   resolveTheme,
@@ -39,6 +40,7 @@ function subscribe(notify: () => void) {
 }
 
 export function ThemeSwitch() {
+  const { locale, t } = useI18n();
   const preference = useSyncExternalStore(subscribe, currentPreference, () => 'system');
   function change(value: string) {
     const next = parseThemePreference(value);
@@ -51,16 +53,16 @@ export function ThemeSwitch() {
     window.dispatchEvent(new Event(changedEvent));
   }
   return (
-    <label className="theme-switch">
-      <span>Тема</span>
+    <label className="theme-switch" lang={locale}>
+      <span>{t('Тема', 'Безендіру')}</span>
       <select
-        aria-label="Тема оформления"
+        aria-label={t('Тема оформления', 'Безендіру тақырыбы')}
         value={preference}
         onChange={(event) => change(event.target.value)}
       >
-        <option value="light">Светлая</option>
-        <option value="dark">Тёмная</option>
-        <option value="system">Система</option>
+        <option value="light">{t('Светлая', 'Ашық')}</option>
+        <option value="dark">{t('Тёмная', 'Қараңғы')}</option>
+        <option value="system">{t('Система', 'Жүйе')}</option>
       </select>
     </label>
   );

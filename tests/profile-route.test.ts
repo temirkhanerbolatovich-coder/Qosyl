@@ -119,6 +119,17 @@ describe('Self-profile API boundary', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it('rejects local portfolio URLs before starting a transaction', async () => {
+    const response = await POST(
+      request({
+        ...input,
+        externalWorks: [{ title: 'Работа', description: '', url: 'https://127.0.0.1/' }],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects an oversized streamed request before starting a transaction', async () => {
     const response = await POST(request({ ...input, bio: 'x'.repeat(17_000) }));
     expect(response.status).toBe(413);
@@ -144,6 +155,42 @@ describe('Self-profile API boundary', () => {
         action: 'profile_updated',
       }),
     });
+  });
+
+  it('saves the headline for the current student and preserves it when omitted', async () => {
+    expect((await POST(request({ ...input, headline: '  Начинающий дизайнер  ' }))).status).toBe(
+      200,
+    );
+    expect(mocks.studentUpsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ headline: 'Начинающий дизайнер' }),
+      }),
+    );
+    expect((await POST(request(input))).status).toBe(200);
+    expect(mocks.studentUpsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ headline: undefined }) }),
+    );
+  });
+
+  it('saves optional student details and leaves them untouched for older requests', async () => {
+    const details = { studyYear: 2, languages: ['Русский', 'Русский'], experiences: [] };
+    expect((await POST(request({ ...input, ...details }))).status).toBe(200);
+    expect(mocks.studentUpsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { userId: user.id },
+        update: expect.objectContaining({ studyYear: 2, languages: ['Русский'], experiences: [] }),
+      }),
+    );
+    await POST(request(input));
+    expect(mocks.studentUpsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          studyYear: undefined,
+          languages: undefined,
+          experiences: undefined,
+        }),
+      }),
+    );
   });
 
   it('rechecks account suspension inside the transaction and performs no updates', async () => {

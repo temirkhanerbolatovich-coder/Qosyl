@@ -12,7 +12,14 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { categoryLabels, date, modeLabels, money, statusLabels } from '@/lib/labels';
+import { date, money } from '@/lib/labels';
+import {
+  localizedCategoryLabels,
+  localizedModeLabels,
+  localizedStatusLabels,
+} from '@/lib/localized-labels';
+import { useI18n } from './locale-provider';
+import { MarketplaceMessage, useMarketplaceCopy } from './marketplace-copy';
 import type { Project, Viewer } from './types';
 import type { PlatformView, ViewData, CommandData } from '@/contracts/api-responses';
 import type { Action } from '@/lib/validation';
@@ -149,38 +156,46 @@ export function ActionFeedback({ error, success }: { error?: string; success?: s
       {error && (
         <div className="alert error" role="alert">
           <AlertCircle size={18} />
-          <span>{error}</span>
+          <MarketplaceMessage text={error} />
         </div>
       )}
       {success && (
         <div className="alert success" role="status">
           <CheckCircle2 size={18} />
-          <span>{success}</span>
+          <MarketplaceMessage text={success} />
         </div>
       )}
     </>
   );
 }
 export function LoadState({ error, retry }: { error?: string; retry?: () => void }) {
+  const { locale, t } = useI18n();
   return error ? (
-    <div className="panel empty-state">
+    <div className="panel empty-state" lang={locale}>
       <AlertCircle size={30} />
-      <h2>Не удалось открыть страницу</h2>
-      <p className="muted">{error}</p>
+      <h2>{t('Не удалось открыть страницу', 'Бетті ашу мүмкін болмады')}</h2>
+      <p className="muted">
+        <MarketplaceMessage text={error} />
+      </p>
       <div className="button-row">
         {retry && (
           <button className="button secondary" onClick={retry}>
             <RefreshCw size={16} />
-            Повторить
+            {t('Повторить', 'Қайталау')}
           </button>
         )}
         <Link className="text-link" href="/auth/login">
-          Войти в аккаунт
+          {t('Войти в аккаунт', 'Аккаунтқа кіру')}
         </Link>
       </div>
     </div>
   ) : (
-    <div className="loading-skeleton" role="status" aria-label="Загрузка">
+    <div
+      className="loading-skeleton"
+      lang={locale}
+      role="status"
+      aria-label={t('Загрузка', 'Жүктелуде')}
+    >
       <div />
       <div />
       <div />
@@ -188,13 +203,15 @@ export function LoadState({ error, retry }: { error?: string; retry?: () => void
   );
 }
 export function StatusBadge({ status }: { status: string }) {
+  const { locale } = useI18n();
+  const statusLabels = localizedStatusLabels(locale);
   const StatusIcon = ['accepted', 'completed', 'published', 'active'].includes(status)
     ? CheckCircle2
     : ['cancelled', 'disputed', 'rejected'].includes(status)
       ? AlertCircle
       : Clock3;
   return (
-    <span className={`badge status-${status}`}>
+    <span className={`badge status-${status}`} lang={locale}>
       <StatusIcon size={14} aria-hidden="true" />
       {statusLabels[status] ?? status}
     </span>
@@ -258,8 +275,11 @@ export function PageHeading({
   );
 }
 export function ProjectCard({ project }: { project: Project }) {
+  const { locale, t } = useI18n();
+  const categoryLabels = localizedCategoryLabels(locale);
+  const modeLabels = localizedModeLabels(locale);
   return (
-    <article className="project-card">
+    <article className="project-card" lang={locale}>
       <div className="card-top">
         <span className={`category-icon category-${project.category}`}>
           {(categoryLabels[project.category] ?? project.category).slice(0, 1)}
@@ -270,31 +290,42 @@ export function ProjectCard({ project }: { project: Project }) {
           </span>
           {project.demo && <DemoBadge />}
         </div>
-        <span className="budget">{money(project.budgetKzt)}</span>
       </div>
       <h2>
-        <Link href={`/projects/${project.id}`}>{project.title.replace(/^ДЕМО:\s*/i, '')}</Link>
+        <Link lang="und" href={`/projects/${project.id}`}>
+          {project.title.replace(/^ДЕМО:\s*/i, '')}
+        </Link>
       </h2>
-      <p className="card-description">{project.problem || project.description}</p>
+      <p className="card-description" lang="und">
+        {project.problem || project.description}
+      </p>
+      <div className="project-budget">
+        <span>{t('Бюджет проекта', 'Жоба бюджеті')}</span>
+        <strong className="budget">{money(project.budgetKzt, locale)}</strong>
+      </div>
       <div className="project-meta">
         <span>
           <Clock3 size={14} />
-          {project.estimatedHours} ч. работы
+          {project.estimatedHours} {t('ч. работы', 'сағ. жұмыс')}
         </span>
         <span>
           <MapPin size={14} />
           {modeLabels[project.mode]}
-          {project.mode !== 'remote' && project.city ? ` · ${project.city}` : ''}
+          {project.mode !== 'remote' && project.city ? (
+            <span lang="und">{` · ${project.city}`}</span>
+          ) : (
+            ''
+          )}
         </span>
       </div>
       <div className="tag-row">
         {project.skills.slice(0, 3).map((skill) => (
-          <span className="tag" key={skill}>
+          <span className="tag" lang="und" key={skill}>
             {skill}
           </span>
         ))}
         {project.difficulty === 'beginner_friendly' && (
-          <span className="tag beginner">Можно без опыта</span>
+          <span className="tag beginner">{t('Можно без опыта', 'Тәжірибесіз де болады')}</span>
         )}
       </div>
       <div className="card-bottom">
@@ -303,21 +334,25 @@ export function ProjectCard({ project }: { project: Project }) {
           {project.client?.clientProfile?.verificationStatus === 'verified' ? (
             <>
               <ShieldCheck size={14} />
-              Заказчик проверен
+              {t('Заказчик проверен', 'Тапсырыс беруші тексерілген')}
             </>
           ) : (
-            'Заказ прошёл модерацию'
+            t('Заказ прошёл модерацию', 'Тапсырыс модерациядан өткен')
           )}
         </span>
-        <span>До {date(project.dueAt)}</span>
+        <span>
+          {t('До', 'Мерзімі')} {date(project.dueAt, false, locale)}
+        </span>
       </div>
       <Link className="text-link card-open" href={`/projects/${project.id}`}>
-        Подробнее о задаче <ArrowRight size={15} aria-hidden="true" />
+        {t('Подробнее о задаче', 'Тапсырма туралы толығырақ')}{' '}
+        <ArrowRight size={15} aria-hidden="true" />
       </Link>
     </article>
   );
 }
 export function WorkspaceNav({ active }: { active: string }) {
+  const { locale, copy } = useMarketplaceCopy();
   const viewer = useViewer();
   const items = [
     { href: '/dashboard', title: 'Обзор' },
@@ -334,7 +369,7 @@ export function WorkspaceNav({ active }: { active: string }) {
     ...(viewer?.roles.includes('admin') ? [{ href: '/admin', title: 'Модерация' }] : []),
   ];
   return (
-    <nav className="workspace-nav" aria-label="Личный кабинет">
+    <nav className="workspace-nav" lang={locale} aria-label={copy('Личный кабинет')}>
       {items.map((item) => (
         <Link
           aria-current={active === item.href ? 'page' : undefined}
@@ -342,7 +377,7 @@ export function WorkspaceNav({ active }: { active: string }) {
           href={item.href}
           key={item.href}
         >
-          {item.title}
+          {copy(item.title)}
         </Link>
       ))}
     </nav>

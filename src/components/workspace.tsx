@@ -1,5 +1,7 @@
 'use client';
+import { MarketplaceMessage, useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
+import { useState } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -12,9 +14,19 @@ import {
   Send,
   ShieldCheck,
 } from 'lucide-react';
-import { date, eventLabels, lines, modeLabels, money, paymentLabels } from '@/lib/labels';
+import { date, lines, money } from '@/lib/labels';
+import {
+  localizedEventLabels,
+  localizedModeLabels,
+  localizedPaymentLabels,
+} from '@/lib/localized-labels';
 import { ProjectForm } from './project-form';
 import { ComplaintForm } from './project-detail';
+import {
+  AttachmentDownload,
+  ProjectAttachmentsPanel,
+  useProjectAttachments,
+} from './project-attachments';
 import {
   ActionFeedback,
   DemoBadge,
@@ -41,18 +53,31 @@ function snapshotCriteria(snapshot: Record<string, unknown>, fallback: string[])
 }
 
 export function WorkspaceScreen({ id }: { id: string }) {
+  const { locale, copy } = useMarketplaceCopy();
+  const modeLabels = localizedModeLabels(locale);
+  const paymentLabels = localizedPaymentLabels(locale);
+  const eventLabels = localizedEventLabels(locale);
   const viewer = useViewer();
   const { data, error, loading, refresh } = useData('work', { id });
-  const action = useAction(refresh);
+  const attachments = useProjectAttachments(
+    id,
+    Boolean(
+      data?.agreements.some((version) => version.clientApprovedAt && version.studentApprovedAt),
+    ),
+  );
+  const [submissionError, setSubmissionError] = useState('');
+  const action = useAction(async () => {
+    await Promise.all([refresh(), attachments.refresh()]);
+  });
   if (loading && !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState />
       </div>
     );
   if (error || !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState error={error} retry={refresh} />
       </div>
     );
@@ -67,7 +92,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
   const latest = data.submissions[0];
   const payment = data.payment;
   const portfolio = data.portfolio;
-  const stages = ['Согласование', 'Выполнение', 'Приёмка', 'Закрытие'];
+  const stages = [copy('Согласование'), copy('Выполнение'), copy('Приёмка'), copy('Закрытие')];
   const step =
     p.status === 'assigned' ? 0 : working ? 1 : p.status === 'submitted' ? 2 : accepted ? 3 : -1;
   const myApproval = client ? agreement?.clientApprovedAt : agreement?.studentApprovedAt;
@@ -82,27 +107,31 @@ export function WorkspaceScreen({ id }: { id: string }) {
   ].includes(p.status);
   const mayCancel = p.status === 'assigned';
   return (
-    <div className="page-shell">
+    <div className="page-shell" lang={locale}>
       <Link className="breadcrumb" href="/dashboard">
-        <ArrowLeft size={14} />В личный кабинет
+        <ArrowLeft size={14} />
+        {copy('В личный кабинет')}
       </Link>
       <div className="workspace-heading">
         <div className="detail-top-tags">
           <StatusBadge status={p.status} />
           {p.demo && <DemoBadge />}
-          <span className="muted small-text">Рабочая область · только участникам</span>
+          <span className="muted small-text">{copy('Рабочая область · только участникам')}</span>
         </div>
-        <h1 className="detail-title">{p.title}</h1>
+        <h1 className="detail-title" lang="und">
+          {p.title}
+        </h1>
         <p className="muted small-text">
-          Заказчик: {p.client?.clientProfile?.name ?? p.client?.name ?? '—'}{' '}
-          <span style={{ margin: '0 8px' }}>·</span> Исполнитель: {p.assignedStudent?.name ?? '—'}
+          {copy('Заказчик:')} {p.client?.clientProfile?.name ?? p.client?.name ?? '—'}{' '}
+          <span style={{ margin: '0 8px' }}>·</span> {copy('Исполнитель:')}{' '}
+          {p.assignedStudent?.name ?? '—'}
         </p>
       </div>
-      <div className="workflow-steps" aria-label="Этапы заказа">
+      <div className="workflow-steps" aria-label={copy('Этапы заказа')}>
         {stages.map((label, i) => (
           <div
             className={`workflow-step ${step === i ? 'active' : step > i ? 'done' : ''}`}
-            key={label}
+            key={i}
           >
             <strong>
               0{i + 1} · {label}
@@ -115,8 +144,9 @@ export function WorkspaceScreen({ id }: { id: string }) {
         <div className="alert error">
           <Info size={18} />
           <span>
-            Открыт спор. Передача результата и закрытие приостановлены. Модератор рассмотрит
-            обращение; гарантии выплаты или автоматического арбитража нет.
+            {copy(
+              'Открыт спор. Передача результата и закрытие приостановлены. Модератор рассмотрит обращение; гарантии выплаты или автоматического арбитража нет.',
+            )}
           </span>
         </div>
       )}
@@ -124,48 +154,56 @@ export function WorkspaceScreen({ id }: { id: string }) {
         <div className="split-main stack">
           <section className="panel">
             <div className="section-title">
-              <h2>Согласованные условия</h2>
-              <span className="badge">Версия {agreement?.number ?? '—'}</span>
+              <h2>{copy('Согласованные условия')}</h2>
+              <span className="badge">
+                {copy('Версия')} {agreement?.number ?? '—'}
+              </span>
             </div>
-            <p className="prose pre-wrap">
+            <p className="prose pre-wrap" lang="und">
               {snapshotText(snapshot, 'deliverables', p.deliverables)}
             </p>
             <dl className="definition-list">
               <div>
-                <dt>Бюджет</dt>
-                <dd>{money(snapshotNumber(snapshot, 'budgetKzt', p.budgetKzt))}</dd>
+                <dt>{copy('Бюджет')}</dt>
+                <dd>{money(snapshotNumber(snapshot, 'budgetKzt', p.budgetKzt), locale)}</dd>
               </div>
               <div>
-                <dt>Трудоёмкость</dt>
-                <dd>{snapshotNumber(snapshot, 'estimatedHours', p.estimatedHours)} ч.</dd>
+                <dt>{copy('Трудоёмкость')}</dt>
+                <dd>
+                  {snapshotNumber(snapshot, 'estimatedHours', p.estimatedHours)} {copy('ч.')}
+                </dd>
               </div>
               <div>
-                <dt>Дедлайн</dt>
-                <dd>{date(snapshotText(snapshot, 'dueAt', p.dueAt))}</dd>
+                <dt>{copy('Дедлайн')}</dt>
+                <dd>{date(snapshotText(snapshot, 'dueAt', p.dueAt), false, locale)}</dd>
               </div>
               <div>
-                <dt>Формат</dt>
+                <dt>{copy('Формат')}</dt>
                 <dd>
                   {modeLabels[snapshotText(snapshot, 'mode', p.mode)]} ·{' '}
-                  {snapshotText(snapshot, 'city', p.city) || 'Любой город'}
+                  {snapshotText(snapshot, 'city', p.city) || copy('Любой город')}
                 </dd>
               </div>
             </dl>
             <div className="divider" />
-            <h3>Критерии приёмки</h3>
+            <h3>{copy('Критерии приёмки')}</h3>
             <ol className="criteria-list">
               {criteria.map((c, i) => (
-                <li key={i}>{c}</li>
+                <li key={i} lang="und">
+                  {c}
+                </li>
               ))}
             </ol>
             <div className="agreement-status">
               <span className={agreement?.clientApprovedAt ? 'approved' : ''}>
-                {agreement?.clientApprovedAt ? <CheckCircle2 size={15} /> : <Circle size={15} />}
-                Заказчик {agreement?.clientApprovedAt ? 'подтвердил' : 'не подтвердил'}
+                {agreement?.clientApprovedAt ? <CheckCircle2 size={15} /> : <Circle size={15} />}{' '}
+                {copy('Заказчик')}{' '}
+                {agreement?.clientApprovedAt ? copy('подтвердил') : copy('не подтвердил')}
               </span>
               <span className={agreement?.studentApprovedAt ? 'approved' : ''}>
-                {agreement?.studentApprovedAt ? <CheckCircle2 size={15} /> : <Circle size={15} />}
-                Исполнитель {agreement?.studentApprovedAt ? 'подтвердил' : 'не подтвердил'}
+                {agreement?.studentApprovedAt ? <CheckCircle2 size={15} /> : <Circle size={15} />}{' '}
+                {copy('Исполнитель')}{' '}
+                {agreement?.studentApprovedAt ? copy('подтвердил') : copy('не подтвердил')}
               </span>
             </div>
             {p.status === 'assigned' && (
@@ -173,8 +211,9 @@ export function WorkspaceScreen({ id }: { id: string }) {
                 <div className="alert">
                   <LockKeyhole size={17} />
                   <span>
-                    Начало работы возможно только после двух подтверждений этой версии. Проверьте
-                    бюджет, сроки, объём и критерии.
+                    {copy(
+                      'Начало работы возможно только после двух подтверждений этой версии. Проверьте бюджет, сроки, объём и критерии.',
+                    )}
                   </span>
                 </div>
                 {!myApproval && (client || student) && (
@@ -189,7 +228,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       )
                     }
                   >
-                    Подтвердить условия версии {agreement?.number}
+                    {copy('Подтвердить условия версии')} {agreement?.number}
                   </button>
                 )}
               </>
@@ -200,44 +239,51 @@ export function WorkspaceScreen({ id }: { id: string }) {
                 <div>
                   {p.locationPrivate && (
                     <p style={{ marginBottom: p.contactPrivate ? 6 : 0 }}>
-                      <strong>Место встречи:</strong> {p.locationPrivate}
+                      <strong>{copy('Место встречи:')}</strong> {p.locationPrivate}
                     </p>
                   )}
                   {p.contactPrivate && (
                     <p style={{ margin: 0 }}>
-                      <strong>Контакт:</strong> {p.contactPrivate}
+                      <strong>{copy('Контакт:')}</strong> {p.contactPrivate}
                     </p>
                   )}
-                  <small>Закрытая информация, доступная участникам проекта.</small>
+                  <small>{copy('Закрытая информация, доступная участникам проекта.')}</small>
                 </div>
               </div>
             ) : null}
             {mayPropose && (client || student) && (
               <details className="details-toggle">
-                <summary>Изменить условия по взаимному согласию</summary>
+                <summary>{copy('Изменить условия по взаимному согласию')}</summary>
                 <p className="muted small-text">
-                  Предложение создаст новую версию и вернёт заказ на согласование. Выполнение
-                  возобновится после подтверждения обеими сторонами. Прошлая версия останется в
-                  истории.
+                  {copy(
+                    'Предложение создаст новую версию и вернёт заказ на согласование. Выполнение возобновится после подтверждения обеими сторонами. Прошлая версия останется в истории.',
+                  )}
                 </p>
                 <ProjectForm initial={p} proposal afterSave={refresh} />
               </details>
             )}
             {data.agreements.length > 1 && (
               <details className="details-toggle">
-                <summary>История версий условий ({data.agreements.length})</summary>
+                <summary>
+                  {copy('История версий условий (')}
+                  {data.agreements.length})
+                </summary>
                 {data.agreements.map((version) => {
                   const s = version.snapshotJson;
                   return (
                     <article className="submission" key={version.id}>
                       <div className="submission-heading">
-                        <span>Версия {version.number}</span>
-                        <span className="muted small-text">{date(version.createdAt, true)}</span>
+                        <span>
+                          {copy('Версия')} {version.number}
+                        </span>
+                        <span className="muted small-text">
+                          {date(version.createdAt, true, locale)}
+                        </span>
                       </div>
                       <p>{snapshotText(s, 'deliverables', '')}</p>
                       <p className="muted small-text">
-                        {money(snapshotNumber(s, 'budgetKzt', p.budgetKzt))} · до{' '}
-                        {date(snapshotText(s, 'dueAt', p.dueAt))}
+                        {money(snapshotNumber(s, 'budgetKzt', p.budgetKzt), locale)} {copy('· до')}{' '}
+                        {date(snapshotText(s, 'dueAt', p.dueAt), false, locale)}
                       </p>
                       <ol className="criteria-list">
                         {snapshotCriteria(s, []).map((c, i) => (
@@ -245,15 +291,14 @@ export function WorkspaceScreen({ id }: { id: string }) {
                         ))}
                       </ol>
                       <p className="small-text muted" style={{ margin: 0 }}>
-                        Заказчик:{' '}
+                        {copy('Заказчик:')}{' '}
                         {version.clientApprovedAt
-                          ? date(version.clientApprovedAt, true)
-                          : 'не подтвердил'}
-                        <br />
-                        Исполнитель:{' '}
+                          ? date(version.clientApprovedAt, true, locale)
+                          : copy('не подтвердил')}
+                        <br /> {copy('Исполнитель:')}{' '}
                         {version.studentApprovedAt
-                          ? date(version.studentApprovedAt, true)
-                          : 'не подтвердил'}
+                          ? date(version.studentApprovedAt, true, locale)
+                          : copy('не подтвердил')}
                       </p>
                     </article>
                   );
@@ -263,9 +308,9 @@ export function WorkspaceScreen({ id }: { id: string }) {
           </section>
           {data.milestones.length > 0 && (
             <section className="panel">
-              <h2>Чек-лист результата</h2>
+              <h2>{copy('Чек-лист результата')}</h2>
               <p className="muted small-text">
-                Помогает проверить готовность. Отметки не заменяют приёмку заказчика.
+                {copy('Помогает проверить готовность. Отметки не заменяют приёмку заказчика.')}
               </p>
               <div className="checklist">
                 {data.milestones.map((m) => (
@@ -280,71 +325,134 @@ export function WorkspaceScreen({ id }: { id: string }) {
                     key={m.id}
                   >
                     <span className="check-box">{m.done && <Check size={13} />}</span>
-                    <span>{m.title}</span>
+                    <span lang="und">{m.title}</span>
                   </button>
                 ))}
               </div>
             </section>
           )}
+          <ProjectAttachmentsPanel
+            state={attachments}
+            mayUpload={working && (client || student)}
+            disabled={action.busy}
+          />
           {student && working && (
             <section className="panel">
               <div className="section-title">
-                <h2>Передать результат</h2>
+                <h2>{copy('Передать результат')}</h2>
                 <Send size={19} className="muted" />
               </div>
               <p className="muted small-text">
-                Добавьте ссылку на результат и поясните, как выполнены критерии. Не загружайте
-                персональные данные и закрытые материалы клиентов.
+                {copy(
+                  'Добавьте HTTPS-ссылки или выберите свои загруженные файлы и поясните, как выполнены критерии. Всего до пяти ссылок и файлов. Не передавайте персональные данные и материалы без права использования.',
+                )}
               </p>
               <form
                 className="stack"
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);
+                  const links = lines(f.get('links'));
+                  const attachmentIds = f.getAll('attachmentIds').map(String);
+                  if (!links.length && !attachmentIds.length) {
+                    setSubmissionError(
+                      'Добавьте хотя бы одну HTTPS-ссылку или выберите файл результата.',
+                    );
+                    return;
+                  }
+                  if (links.length + attachmentIds.length > 5) {
+                    setSubmissionError(
+                      'В одной сдаче допускается не больше пяти ссылок и файлов вместе.',
+                    );
+                    return;
+                  }
+                  setSubmissionError('');
                   await action.run(
                     'submitDeliverable',
-                    { projectId: id, links: lines(f.get('links')), notes: f.get('notes') },
+                    { projectId: id, links, attachmentIds, notes: f.get('notes') },
                     'Результат передан заказчику на проверку',
                   );
                 }}
               >
                 <label className="field">
-                  Ссылки на результат
+                  {copy('Ссылки на результат')}{' '}
                   <textarea
                     name="links"
-                    required
                     maxLength={3000}
-                    placeholder="https://… — одна HTTPS-ссылка на строку"
+                    placeholder={copy('https://… — одна HTTPS-ссылка на строку')}
                   />
-                  <small>До 5 ссылок. Убедитесь, что заказчик имеет доступ к материалам.</small>
+                  <small>
+                    {copy(
+                      'Одна HTTPS-ссылка на строку. Поле можно оставить пустым, если выбран файл.',
+                    )}
+                  </small>
                 </label>
+                {attachments.files?.some((file) => file.uploaderId === viewer?.id) && (
+                  <fieldset className="stack">
+                    <legend>{copy('Файлы для этой сдачи')}</legend>
+                    <p className="muted small-text">
+                      {copy(
+                        'Выберите свои файлы. Уже использованный файл можно включить в новую сдачу.',
+                      )}
+                    </p>
+                    {attachments.files
+                      .filter((file) => file.uploaderId === viewer?.id)
+                      .map((file) => (
+                        <label className="check-label" key={file.id}>
+                          <input
+                            type="checkbox"
+                            name="attachmentIds"
+                            value={file.id}
+                            disabled={action.busy || attachments.busy}
+                          />
+                          <span className="pre-wrap" lang="und">
+                            {file.filename}
+                          </span>
+                        </label>
+                      ))}
+                  </fieldset>
+                )}
+                {submissionError && (
+                  <p className="alert error" role="alert">
+                    <MarketplaceMessage text={submissionError} />
+                  </p>
+                )}
                 <label className="field">
-                  Комментарий к сдаче
+                  {copy('Комментарий к сдаче')}{' '}
                   <textarea
                     name="notes"
                     required
                     minLength={10}
                     maxLength={4000}
-                    placeholder="Что выполнено и где проверить каждый критерий?"
+                    placeholder={copy('Что выполнено и где проверить каждый критерий?')}
                   />
                 </label>
-                <button className="button" disabled={action.busy} type="submit">
-                  Сдать результат
+                <button className="button" disabled={action.busy || attachments.busy} type="submit">
+                  {copy('Сдать результат')}
                 </button>
               </form>
             </section>
           )}
           {data.submissions.length > 0 && (
             <section className="panel">
-              <h2>Результаты и приёмка</h2>
+              <h2>{copy('Результаты и приёмка')}</h2>
               {data.submissions.map((submission, index) => (
                 <article className="submission" key={submission.id}>
                   <div className="submission-heading">
                     <span>
-                      Сдача {data.submissions.length - index}
-                      {index === 0 ? ' · последняя' : ''}
+                      {copy('Сдача')} {data.submissions.length - index}
+                      {index === 0 ? copy(' · последняя') : ''}
                     </span>
-                    <time className="muted small-text">{date(submission.createdAt, true)}</time>
+                    <time className="muted small-text">
+                      {date(submission.createdAt, true, locale)}
+                    </time>
+                  </div>
+                  <div className="link-list">
+                    {attachments.files
+                      ?.filter((file) => file.submissionIds.includes(submission.id))
+                      .map((file) => (
+                        <AttachmentDownload file={file} key={file.id} />
+                      ))}
                   </div>
                   <p className="pre-wrap">{submission.notes}</p>
                   <div className="link-list">
@@ -356,19 +464,24 @@ export function WorkspaceScreen({ id }: { id: string }) {
                         rel="noopener noreferrer"
                         target="_blank"
                       >
-                        Результат {i + 1} · {link}
+                        {copy('Результат')} {i + 1} · {link}
                         <ExternalLink size={11} style={{ display: 'inline', marginLeft: 5 }} />
                       </a>
                     ))}
                   </div>
                   {submission.revisions?.map((revision) => (
                     <div className="revision" key={revision.id}>
-                      <strong>Запрошены правки · {date(revision.createdAt, true)}</strong>
+                      <strong>
+                        {copy('Запрошены правки ·')} {date(revision.createdAt, true, locale)}
+                      </strong>
                       <p className="pre-wrap">{revision.notes}</p>
                       <p style={{ marginTop: 8 }}>
-                        Критерии:{' '}
+                        {copy('Критерии:')}{' '}
                         {revision.criteriaIndexes
-                          .map((i) => `${i + 1}. ${criteria[i] ?? 'Критерий из предыдущей версии'}`)
+                          .map(
+                            (i) =>
+                              `${i + 1}. ${criteria[i] ?? copy('Критерий из предыдущей версии')}`,
+                          )
                           .join('; ')}
                       </p>
                     </div>
@@ -386,11 +499,10 @@ export function WorkspaceScreen({ id }: { id: string }) {
                           )
                         }
                       >
-                        <FileCheck2 size={16} />
-                        Принять результат
+                        <FileCheck2 size={16} /> {copy('Принять результат')}
                       </button>
                       <details className="details-toggle">
-                        <summary>Запросить конкретные правки</summary>
+                        <summary>{copy('Запросить конкретные правки')}</summary>
                         <form
                           className="stack"
                           onSubmit={async (e) => {
@@ -409,26 +521,28 @@ export function WorkspaceScreen({ id }: { id: string }) {
                           }}
                         >
                           <div className="field">
-                            <span>Какие согласованные критерии не выполнены?</span>
+                            <span>{copy('Какие согласованные критерии не выполнены?')}</span>
                             {criteria.map((criterion, i) => (
                               <label className="check-label" key={i}>
                                 <input type="checkbox" name="criteria" value={i} />
-                                <span>{criterion}</span>
+                                <span lang="und">{criterion}</span>
                               </label>
                             ))}
                           </div>
                           <label className="field">
-                            Что именно исправить?
+                            {copy('Что именно исправить?')}{' '}
                             <textarea
                               name="notes"
                               required
                               minLength={10}
                               maxLength={3000}
-                              placeholder="Укажите конкретные замечания в рамках согласованного объёма"
+                              placeholder={copy(
+                                'Укажите конкретные замечания в рамках согласованного объёма',
+                              )}
                             />
                           </label>
                           <button className="button secondary" disabled={action.busy} type="submit">
-                            Отправить замечания
+                            {copy('Отправить замечания')}
                           </button>
                         </form>
                       </details>
@@ -436,8 +550,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
                   )}
                   {index === 0 && accepted && (
                     <span className="badge status-accepted">
-                      <CheckCircle2 size={12} />
-                      Результат принят заказчиком
+                      <CheckCircle2 size={12} /> {copy('Результат принят заказчиком')}
                     </span>
                   )}
                 </article>
@@ -446,17 +559,18 @@ export function WorkspaceScreen({ id }: { id: string }) {
           )}
           {accepted && (
             <section className="panel">
-              <h2>Подтверждённый опыт</h2>
+              <h2>{copy('Подтверждённый опыт')}</h2>
               <p className="muted small-text">
-                Приёмка подтверждена заказчиком. Публикация записи — только по согласию обеих
-                сторон. Внутренние материалы заказа автоматически в портфолио не попадают.
+                {copy(
+                  'Приёмка подтверждена заказчиком. Публикация записи — только по согласию обеих сторон. Внутренние материалы заказа автоматически в портфолио не попадают.',
+                )}
               </p>
               {student && (
                 <details className="details-toggle" open={!portfolio?.summary}>
                   <summary>
                     {portfolio?.summary
-                      ? 'Изменить запись и видимость'
-                      : 'Подготовить запись портфолио'}
+                      ? copy('Изменить запись и видимость')
+                      : copy('Подготовить запись портфолио')}
                   </summary>
                   <form
                     className="stack"
@@ -483,7 +597,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
                     }}
                   >
                     <label className="field">
-                      Публичное название
+                      {copy('Публичное название')}{' '}
                       <input
                         name="title"
                         required
@@ -493,29 +607,31 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       />
                     </label>
                     <label className="field">
-                      Краткое описание результата
+                      {copy('Краткое описание результата')}{' '}
                       <textarea
                         name="summary"
                         required
                         minLength={20}
                         maxLength={2000}
                         defaultValue={portfolio?.summary ?? ''}
-                        placeholder="Обезличенное описание вклада и результата, без закрытых сведений"
+                        placeholder={copy(
+                          'Обезличенное описание вклада и результата, без закрытых сведений',
+                        )}
                       />
                     </label>
                     <label className="field">
-                      Ваш вклад / роль
+                      {copy('Ваш вклад / роль')}{' '}
                       <input
                         name="role"
                         required
                         minLength={3}
                         maxLength={150}
                         defaultValue={portfolio?.role ?? ''}
-                        placeholder="Например, анализ данных и создание отчёта"
+                        placeholder={copy('Например, анализ данных и создание отчёта')}
                       />
                     </label>
                     <label className="field">
-                      Навыки через запятую
+                      {copy('Навыки через запятую')}{' '}
                       <input
                         name="skills"
                         defaultValue={portfolio?.skills.join(', ') ?? p.skills.join(', ')}
@@ -523,25 +639,29 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       />
                     </label>
                     <label className="field">
-                      Только разрешённые публичные ссылки
+                      {copy('Только разрешённые публичные ссылки')}{' '}
                       <textarea
                         name="publicLinks"
                         maxLength={2000}
                         defaultValue={portfolio?.publicLinks.join('\n') ?? ''}
-                        placeholder="Не копируйте сюда приватные ссылки на сдачу"
+                        placeholder={copy('Не копируйте сюда приватные ссылки на сдачу')}
                       />
-                      <small>В обезличенном публичном режиме ссылки не публикуются.</small>
+                      <small>
+                        {copy('В обезличенном публичном режиме ссылки не публикуются.')}
+                      </small>
                     </label>
                     <label className="field">
-                      Видимость
+                      {copy('Видимость')}{' '}
                       <select name="visibility" defaultValue={portfolio?.visibility ?? 'private'}>
-                        <option value="private">Только участникам заказа</option>
-                        <option value="public">Публично после двух согласий</option>
-                        <option value="redacted_public">Публично, обезличено и без ссылок</option>
+                        <option value="private">{copy('Только участникам заказа')}</option>
+                        <option value="public">{copy('Публично после двух согласий')}</option>
+                        <option value="redacted_public">
+                          {copy('Публично, обезличено и без ссылок')}
+                        </option>
                       </select>
                     </label>
                     <button className="button secondary" disabled={action.busy} type="submit">
-                      Сохранить запись портфолио
+                      {copy('Сохранить запись портфолио')}
                     </button>
                   </form>
                 </details>
@@ -552,12 +672,12 @@ export function WorkspaceScreen({ id }: { id: string }) {
                     <h3 style={{ margin: 0 }}>{portfolio.title}</h3>
                     <span className="badge status-accepted">client-confirmed</span>
                   </div>
-                  <p className="pre-wrap small-text">
-                    {portfolio.summary || 'Описание ещё не заполнено'}
+                  <p className="pre-wrap small-text" lang={portfolio.summary ? 'und' : locale}>
+                    {portfolio.summary || copy('Описание ещё не заполнено')}
                   </p>
                   {portfolio.role && (
                     <p className="small-text">
-                      <strong>Вклад:</strong> {portfolio.role}
+                      <strong>{copy('Вклад:')}</strong> {portfolio.role}
                     </p>
                   )}
                   <div className="tag-row">
@@ -583,17 +703,18 @@ export function WorkspaceScreen({ id }: { id: string }) {
                     </div>
                   )}
                   <div className="consent-status">
-                    Видимость:{' '}
+                    {copy('Видимость:')}{' '}
                     {portfolio.visibility === 'private'
-                      ? 'Приватная'
+                      ? copy('Приватная')
                       : portfolio.visibility === 'redacted_public'
-                        ? 'Публичная обезличенная'
-                        : 'Публичная'}
-                    <br />
-                    Заказчик: {portfolio.clientConsentAt ? 'согласовано' : 'согласие не получено'}
-                    <br />
-                    Исполнитель:{' '}
-                    {portfolio.studentConsentAt ? 'согласовано' : 'согласие не получено'}
+                        ? copy('Публичная обезличенная')
+                        : copy('Публичная')}
+                    <br /> {copy('Заказчик:')}{' '}
+                    {portfolio.clientConsentAt ? copy('согласовано') : copy('согласие не получено')}
+                    <br /> {copy('Исполнитель:')}{' '}
+                    {portfolio.studentConsentAt
+                      ? copy('согласовано')
+                      : copy('согласие не получено')}
                   </div>
                   {portfolio.visibility !== 'private' &&
                     !(client ? portfolio.clientConsentAt : portfolio.studentConsentAt) && (
@@ -608,7 +729,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
                           )
                         }
                       >
-                        Согласовать видимость этой версии
+                        {copy('Согласовать видимость этой версии')}
                       </button>
                     )}
                   {portfolio.clientConsentAt &&
@@ -617,11 +738,11 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       <p className="alert success">
                         <ShieldCheck size={16} />
                         <span>
-                          Обе стороны согласовали запись. Она видна в{' '}
+                          {copy('Обе стороны согласовали запись. Она видна в')}{' '}
                           <Link className="text-link" href={`/talent/${p.assignedStudentId}`}>
-                            публичном профиле исполнителя
-                          </Link>
-                          , если профиль открыт.
+                            {copy('публичном профиле исполнителя')}
+                          </Link>{' '}
+                          {copy(', если профиль открыт.')}
                         </span>
                       </p>
                     )}
@@ -631,13 +752,14 @@ export function WorkspaceScreen({ id }: { id: string }) {
           )}
           {accepted && (
             <section className="panel">
-              <h2>Отзыв об участнике</h2>
+              <h2>{copy('Отзыв об участнике')}</h2>
               <p className="muted small-text">
-                Один отзыв от каждой стороны, только после принятого результата. Он может появиться
-                в согласованном публичном портфолио: не указывайте конфиденциальные сведения.
+                {copy(
+                  'Один отзыв от каждой стороны, только после принятого результата. Он может появиться в согласованном публичном портфолио: не указывайте конфиденциальные сведения.',
+                )}
               </p>
               {data.reviews.some((r) => r.authorId === viewer?.id) ? (
-                <p className="small-text muted">Ваш отзыв уже сохранён.</p>
+                <p className="small-text muted">{copy('Ваш отзыв уже сохранён.')}</p>
               ) : (
                 (client || student) && (
                   <form
@@ -653,43 +775,43 @@ export function WorkspaceScreen({ id }: { id: string }) {
                     }}
                   >
                     <label className="field">
-                      Оценка
+                      {copy('Оценка')}{' '}
                       <select name="rating" defaultValue="5">
-                        <option value="5">5 — отлично</option>
-                        <option value="4">4 — хорошо</option>
-                        <option value="3">3 — удовлетворительно</option>
-                        <option value="2">2 — есть существенные проблемы</option>
-                        <option value="1">1 — неудовлетворительно</option>
+                        <option value="5">{copy('5 — отлично')}</option>
+                        <option value="4">{copy('4 — хорошо')}</option>
+                        <option value="3">{copy('3 — удовлетворительно')}</option>
+                        <option value="2">{copy('2 — есть существенные проблемы')}</option>
+                        <option value="1">{copy('1 — неудовлетворительно')}</option>
                       </select>
                     </label>
                     <label className="field">
-                      Ваш опыт взаимодействия
+                      {copy('Ваш опыт взаимодействия')}{' '}
                       <textarea
                         name="body"
                         required
                         minLength={10}
                         maxLength={1500}
-                        placeholder="Что получилось хорошо и что можно улучшить?"
+                        placeholder={copy('Что получилось хорошо и что можно улучшить?')}
                       />
                     </label>
                     <button className="button secondary" disabled={action.busy}>
-                      Оставить отзыв
+                      {copy('Оставить отзыв')}
                     </button>
                   </form>
                 )
               )}
               {data.reviews.map((review) => (
                 <article className="review-card" key={review.id}>
-                  <strong className="small-text">{review.author?.name ?? 'Участник'}</strong>
+                  <strong className="small-text">{review.author?.name ?? copy('Участник')}</strong>
                   <p
                     className="review-stars"
                     style={{ margin: '6px 0' }}
-                    aria-label={`Оценка ${review.rating} из 5`}
+                    aria-label={`${copy('Оценка')} ${review.rating} ${copy('из 5')}`}
                   >
                     {'★'.repeat(review.rating)}
                     {'☆'.repeat(5 - review.rating)}
                   </p>
-                  <p className="small-text pre-wrap" style={{ margin: 0 }}>
+                  <p className="small-text pre-wrap" lang="und" style={{ margin: 0 }}>
                     {review.body}
                   </p>
                 </article>
@@ -699,20 +821,21 @@ export function WorkspaceScreen({ id }: { id: string }) {
         </div>
         <aside className="work-aside">
           <section className="panel">
-            <h2>Оплата — отдельно</h2>
+            <h2>{copy('Оплата — отдельно')}</h2>
             <p className="payment-label">{paymentLabels[payment?.status ?? 'not_reported']}</p>
             <p className="muted small-text">
-              Это заявления участников о расчёте вне площадки. Платформа не проводит и не
-              гарантирует платежи.
+              {copy(
+                'Это заявления участников о расчёте вне площадки. Платформа не проводит и не гарантирует платежи.',
+              )}
             </p>
             {payment?.clientPaidAt && (
               <p className="small-text muted">
-                Заказчик отметил: {date(payment.clientPaidAt, true)}
+                {copy('Заказчик отметил:')} {date(payment.clientPaidAt, true, locale)}
               </p>
             )}
             {payment?.studentReceivedAt && (
               <p className="small-text muted">
-                Исполнитель подтвердил: {date(payment.studentReceivedAt, true)}
+                {copy('Исполнитель подтвердил:')} {date(payment.studentReceivedAt, true, locale)}
               </p>
             )}
             {accepted && (
@@ -729,7 +852,7 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       )
                     }
                   >
-                    Я оплатил вне платформы
+                    {copy('Я оплатил вне платформы')}
                   </button>
                 )}
                 {student && !payment?.studentReceivedAt && payment?.status !== 'disputed' && (
@@ -744,12 +867,14 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       )
                     }
                   >
-                    Я получил оплату
+                    {copy('Я получил оплату')}
                   </button>
                 )}
                 {student && !payment?.clientPaidAt && payment?.status !== 'disputed' && (
                   <p className="muted small-text">
-                    Сначала заказчик отмечает отправку оплаты, затем вы подтверждаете получение.
+                    {copy(
+                      'Сначала заказчик отмечает отправку оплаты, затем вы подтверждаете получение.',
+                    )}
                   </p>
                 )}
                 {payment?.status !== 'disputed' && (
@@ -764,32 +889,34 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       )
                     }
                   >
-                    Оспорить статус оплаты
+                    {copy('Оспорить статус оплаты')}
                   </button>
                 )}
                 {payment?.status === 'disputed' && (
                   <p className="alert warning">
-                    По оплате открыто обращение модератору. Его ответ появится в уведомлениях.
-                    Рассмотрение обращения не подтверждает оплату и не выполняет возврат денег.
+                    {copy(
+                      'По оплате открыто обращение модератору. Его ответ появится в уведомлениях. Рассмотрение обращения не подтверждает оплату и не выполняет возврат денег.',
+                    )}
                   </p>
                 )}
               </div>
             )}
           </section>
           <section className="panel">
-            <h2>Закрытие заказа</h2>
+            <h2>{copy('Закрытие заказа')}</h2>
             <p className="muted small-text">
-              Заказ завершён после приёмки и отдельного подтверждения обеими сторонами. Отметки
-              оплаты показываются независимо.
+              {copy(
+                'Заказ завершён после приёмки и отдельного подтверждения обеими сторонами. Отметки оплаты показываются независимо.',
+              )}
             </p>
             <div className="closed-status">
               <span>
-                {p.clientClosedAt ? '✓' : '○'} Заказчик{' '}
-                {p.clientClosedAt ? 'закрыл' : 'ещё не закрыл'}
+                {p.clientClosedAt ? '✓' : '○'} {copy('Заказчик')}{' '}
+                {p.clientClosedAt ? copy('закрыл') : copy('ещё не закрыл')}
               </span>
               <span>
-                {p.studentClosedAt ? '✓' : '○'} Исполнитель{' '}
-                {p.studentClosedAt ? 'закрыл' : 'ещё не закрыл'}
+                {p.studentClosedAt ? '✓' : '○'} {copy('Исполнитель')}{' '}
+                {p.studentClosedAt ? copy('закрыл') : copy('ещё не закрыл')}
               </span>
             </div>
             {p.status === 'accepted' && !(client ? p.clientClosedAt : p.studentClosedAt) && (
@@ -800,45 +927,44 @@ export function WorkspaceScreen({ id }: { id: string }) {
                   action.run('closeProject', { projectId: id }, 'Ваша сторона подтвердила закрытие')
                 }
               >
-                Подтвердить закрытие
+                {copy('Подтвердить закрытие')}
               </button>
             )}
             {p.status === 'completed' && (
               <span className="badge status-completed">
-                <CheckCircle2 size={13} />
-                Обе стороны закрыли заказ
+                <CheckCircle2 size={13} /> {copy('Обе стороны закрыли заказ')}
               </span>
             )}
             {!accepted && (
               <p className="muted small-text" style={{ margin: 0 }}>
-                Сначала заказчик должен принять результат.
+                {copy('Сначала заказчик должен принять результат.')}
               </p>
             )}
           </section>
           <section className="panel">
-            <h2>История решений</h2>
+            <h2>{copy('История решений')}</h2>
             <ol className="timeline">
               {data.events.map((event) => (
                 <li key={event.id}>
                   <strong>{eventLabels[event.action] ?? event.action}</strong>
                   <small>
                     {event.actor?.name ? `${event.actor.name} · ` : ''}
-                    {date(event.createdAt, true)}
+                    {date(event.createdAt, true, locale)}
                   </small>
                 </li>
               ))}
             </ol>
           </section>
           <section className="panel">
-            <h2>Если что-то пошло не так</h2>
+            <h2>{copy('Если что-то пошло не так')}</h2>
             <p className="muted small-text">
-              Сохраняйте решения в истории. Модератор рассматривает обращения вручную.
+              {copy('Сохраняйте решения в истории. Модератор рассматривает обращения вручную.')}
             </p>
             {(mayDispute || mayCancel) && (
               <>
                 {mayDispute && (
                   <details className="details-toggle">
-                    <summary>Открыть спор по заказу</summary>
+                    <summary>{copy('Открыть спор по заказу')}</summary>
                     <form
                       className="stack"
                       onSubmit={async (e) => {
@@ -852,18 +978,18 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       }}
                     >
                       <label className="field">
-                        Причина спора
+                        {copy('Причина спора')}{' '}
                         <textarea name="reason" required minLength={10} maxLength={2000} />
                       </label>
                       <button className="button danger" disabled={action.busy}>
-                        Открыть спор
+                        {copy('Открыть спор')}
                       </button>
                     </form>
                   </details>
                 )}
                 {mayCancel && (
                   <details className="details-toggle">
-                    <summary>Отменить заказ</summary>
+                    <summary>{copy('Отменить заказ')}</summary>
                     <form
                       className="stack"
                       onSubmit={async (e) => {
@@ -877,15 +1003,16 @@ export function WorkspaceScreen({ id }: { id: string }) {
                       }}
                     >
                       <label className="field">
-                        Причина отмены
+                        {copy('Причина отмены')}{' '}
                         <textarea name="reason" required minLength={10} maxLength={2000} />
                       </label>
                       <p className="small-text muted">
-                        Отмена не удаляет историю и не решает вопрос расчёта за уже выполненную
-                        работу.
+                        {copy(
+                          'Отмена не удаляет историю и не решает вопрос расчёта за уже выполненную работу.',
+                        )}
                       </p>
                       <button className="button danger" disabled={action.busy}>
-                        Подтвердить отмену
+                        {copy('Подтвердить отмену')}
                       </button>
                     </form>
                   </details>

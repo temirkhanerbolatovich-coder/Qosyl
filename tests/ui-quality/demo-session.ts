@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Cookie, type Page } from '@playwright/test';
 
 /** Reuse three test sessions across viewports, keeping the real login rate limit enabled. */
 export async function signInDemo(page: Page, role: 'student' | 'client' | 'admin') {
@@ -9,8 +9,9 @@ export async function signInDemo(page: Page, role: 'student' | 'client' | 'admin
   const folder = '.local/ui-quality/sessions';
   const file = `${folder}/${database}-${role}.json`;
   try {
-    const state = JSON.parse(await readFile(file, 'utf8'));
-    await page.context().addCookies(state.cookies);
+    const state: { cookies: Cookie[] } = JSON.parse(await readFile(file, 'utf8'));
+    // Reusing a login must not import another test's language preference.
+    await page.context().addCookies(state.cookies.filter((cookie) => cookie.httpOnly));
     return;
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
@@ -23,5 +24,7 @@ export async function signInDemo(page: Page, role: 'student' | 'client' | 'admin
   expect(response.status(), 'Demo role authentication').toBe(200);
   await mkdir(folder, { recursive: true });
   const { cookies } = await page.context().storageState();
-  await writeFile(file, JSON.stringify({ cookies }), { mode: 0o600 });
+  await writeFile(file, JSON.stringify({ cookies: cookies.filter((cookie) => cookie.httpOnly) }), {
+    mode: 0o600,
+  });
 }

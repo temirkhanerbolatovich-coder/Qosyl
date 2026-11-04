@@ -9,7 +9,7 @@ const target = new URL(process.env.DATABASE_TEST_URL ?? 'invalid:');
 if (
   !['postgres:', 'postgresql:'].includes(target.protocol) ||
   !['localhost', '127.0.0.1'].includes(target.hostname) ||
-  target.pathname !== '/student_marketplace_e2e'
+  !/^\/student_marketplace_e2e(?:_ui_[a-f0-9]{12})?$/.test(target.pathname)
 )
   throw new Error('Explicit local E2E database required.');
 const db = new PrismaClient({
@@ -62,6 +62,7 @@ async function fixture() {
 
 test('real expiry/reminders commit once, retain read history and stop after cancellation', async () => {
   const f = await fixture();
+  await db.$executeRaw`INSERT INTO "NotificationPreference" ("userId", "language") VALUES (${f.student.id}, 'kk')`;
   const expired = await f.create(-1),
     soon = await f.create(1),
     work = await f.create(2, 'in_progress'),
@@ -109,6 +110,21 @@ test('real expiry/reminders commit once, retain read history and stop after canc
     where: { userId: { in: [f.client.id, f.student.id] } },
   });
   assert.equal(notifications.length, 5);
+  assert.ok(
+    notifications.some(
+      (notice) => notice.userId === f.student.id && notice.text.includes('мерзімі аяқталды'),
+    ),
+  );
+  assert.ok(
+    notifications.some(
+      (notice) => notice.userId === f.student.id && notice.text.includes('бір тәуліктен'),
+    ),
+  );
+  assert.ok(
+    notifications.some(
+      (notice) => notice.userId === f.client.id && notice.text.includes('Срок опубликованного'),
+    ),
+  );
   await db.notification.updateMany({ where: { userId: f.client.id }, data: { readAt: now } });
   await db.project.update({ where: { id: soon.id }, data: { status: 'cancelled' } });
   const repeated = await runProjectLifecycle(db, {

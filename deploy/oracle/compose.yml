@@ -36,6 +36,8 @@ services:
       DATABASE_URL: postgresql://marketplace_app:${APP_DB_PASSWORD}@db:5432/student_marketplace
       BETTER_AUTH_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       LOCAL_DEV_MODE: 'false'
       DEMO_ENABLED: 'false'
       SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
@@ -60,10 +62,9 @@ services:
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
-      PILOT_USER: ${PILOT_USER:?Set PILOT_USER}
-      PILOT_PASSWORD_HASH: ${PILOT_PASSWORD_HASH:?Set PILOT_PASSWORD_HASH}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./google-verification:/srv/qosyl-verification:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [edge]

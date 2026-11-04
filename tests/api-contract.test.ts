@@ -221,7 +221,7 @@ describe('Maintained application API contract', () => {
     }
   });
 
-  it('documents the admin content boundary, bounded pagination and seven literal actions', () => {
+  it('documents the admin content boundary, bounded pagination and eight literal actions', () => {
     const spec = buildApiSpec();
     const content = spec.paths['/api/admin/content'];
     const schemas = spec.components.schemas as Record<string, Record<string, unknown>>;
@@ -232,6 +232,7 @@ describe('Maintained application API contract', () => {
       'requestSync',
       'addManualContent',
       'reviewContent',
+      'inspectContentPage',
       'editContent',
     ];
     expect(content.get.security).not.toContainEqual({});

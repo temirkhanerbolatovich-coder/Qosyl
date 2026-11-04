@@ -3,6 +3,8 @@ node_modules
 .next
 .env
 .env.*
+**/.env
+**/.env.*
 .local
 research
 test-results

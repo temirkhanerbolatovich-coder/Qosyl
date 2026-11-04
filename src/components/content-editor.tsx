@@ -1,17 +1,22 @@
 'use client';
+import { MarketplaceMessage, useMarketplaceCopy } from './marketplace-copy';
 import { useEffect, useState } from 'react';
-import type { ContentDetailData } from '@/contracts/content-intake';
+import {
+  contentDetailDataSchema,
+  contentMutationDataSchema,
+  type ContentDetailData,
+} from '@/contracts/content-intake';
+import { requestClientData, CLIENT_WRITE_REFRESH_ERROR } from '@/lib/client-data-response';
+import { adminCodeLabel } from '@/lib/admin-labels';
+import { localizedOpportunityCategoryLabels } from '@/lib/localized-opportunity-labels';
 import { date } from '@/lib/labels';
 import { ActionFeedback } from './platform';
 
 async function readDetail(id: string, page: number): Promise<ContentDetailData> {
-  const response = await fetch(`/api/admin/content/${encodeURIComponent(id)}?page=${page}`, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(20000),
-  });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || 'Не удалось прочитать материал.');
-  return body.data;
+  return requestClientData(
+    contentDetailDataSchema.refine((data) => data.item.revisions.length > 0),
+    `/api/admin/content/${encodeURIComponent(id)}?page=${page}`,
+  );
 }
 const localDate = (value: string) => {
   const time = new Date(value);
@@ -26,9 +31,10 @@ export function ContentEditor({
   onClose,
 }: {
   id: string;
-  onSaved: () => Promise<void>;
+  onSaved: () => Promise<boolean>;
   onClose: () => void;
 }) {
+  const { locale, copy } = useMarketplaceCopy();
   const [defaultExpiry] = useState(() =>
     localDate(new Date(Date.now() + 7 * 86400000).toISOString()),
   );
@@ -55,13 +61,27 @@ export function ContentEditor({
       active = false;
     };
   }, [id, page]);
+  async function reloadDetail() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      setDetail(await readDetail(id, page));
+      setError('');
+      setSuccess('');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Ошибка чтения.');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function save(action: string, fields: Record<string, unknown>) {
     if (!detail || busy) return;
     setBusy(true);
     setError('');
     setSuccess('');
+    let committed = false;
     try {
-      const response = await fetch('/api/admin/content', {
+      await requestClientData(contentMutationDataSchema, '/api/admin/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(20000),
@@ -73,23 +93,34 @@ export function ContentEditor({
           expectedUpdatedAt: detail.item.updatedAt,
         }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Не удалось сохранить решение.');
-      setDetail(await readDetail(id, page));
-      await onSaved();
+      committed = true;
+      const updated = await readDetail(id, page);
+      if (!(await onSaved())) throw new Error(CLIENT_WRITE_REFRESH_ERROR);
+      setDetail(updated);
       setSuccess('Сохранено. Решение записано в журнал.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сохранения.');
+      setError(
+        committed
+          ? CLIENT_WRITE_REFRESH_ERROR
+          : e instanceof Error
+            ? e.message
+            : 'Ошибка сохранения.',
+      );
     } finally {
       setBusy(false);
     }
   }
   if (!detail)
     return (
-      <section className="panel stack" aria-label="Редакционная проверка">
-        <p>{error || 'Загрузка материала…'}</p>
+      <section lang={locale} className="panel stack" aria-label={copy('Редакционная проверка')}>
+        <p role={error ? 'alert' : 'status'}>
+          {error ? <MarketplaceMessage text={error} /> : copy('Загрузка материала…')}
+        </p>
+        <button className="button secondary" disabled={busy} onClick={() => void reloadDetail()}>
+          {copy('Обновить материал')}
+        </button>
         <button className="button secondary" onClick={onClose}>
-          Закрыть проверку
+          {copy('Закрыть проверку')}
         </button>
       </section>
     );
@@ -99,39 +130,67 @@ export function ContentEditor({
     detail.history.find((revision) => revision.id === right) ?? detail.history[1] ?? first;
   const terminal = ['rejected', 'archived', 'withdrawn'].includes(detail.item.status);
   return (
-    <section className="panel stack content-editor" aria-label="Редакционная проверка">
+    <section
+      lang={locale}
+      className="panel stack content-editor"
+      aria-label={copy('Редакционная проверка')}
+    >
       <div className="button-row">
-        <h3>Редакционная проверка</h3>
+        <h3>{copy('Редакционная проверка')}</h3>
+        <button className="button secondary" disabled={busy} onClick={() => void reloadDetail()}>
+          {copy('Обновить материал')}
+        </button>
         <button className="button secondary" onClick={onClose}>
-          Закрыть проверку
+          {copy('Закрыть проверку')}
         </button>
       </div>
       <p>
-        <strong>{latest?.title}</strong> · {detail.item.status} · редакция {latest?.number}
+        <strong>
+          <span lang="und">{latest?.title}</span>
+        </strong>{' '}
+        · {adminCodeLabel(detail.item.status, locale)} {copy('· редакция')} {latest?.number}
       </p>
       <p>
-        Источник: {detail.source.name}. {detail.source.rightsNote}
+        {copy('Источник:')} <span lang="und">{detail.source.name}</span>.{' '}
+        <span lang="und">{detail.source.rightsNote}</span>
       </p>
       {detail.source.termsUrl && (
         <a href={detail.source.termsUrl} target="_blank" rel="noopener noreferrer">
-          Условия источника
+          {copy('Условия источника')}
         </a>
       )}
       <p>
-        Одобренная редакция:{' '}
+        {copy('Одобренная редакция:')}{' '}
         {detail.item.approvedRevisionId
-          ? `№ ${detail.history.find((rev) => rev.id === detail.item.approvedRevisionId)?.number ?? 'в истории'}`
-          : 'пока нет'}
-        . Актуальна до: {detail.item.expiresAt ? date(detail.item.expiresAt, true) : 'не задано'}.
+          ? `№ ${detail.history.find((rev) => rev.id === detail.item.approvedRevisionId)?.number ?? copy('в истории')}`
+          : copy('пока нет')}{' '}
+        {copy('. Актуальна до:')}{' '}
+        {detail.item.expiresAt ? date(detail.item.expiresAt, true, locale) : copy('не задано')}.
       </p>
       <p>
-        Проверьте оригинал, аудиторию, даты и право на публикацию. Релевантность правилам не
-        подтверждает достоверность. Изменение текста снимает материал с выдачи до нового решения.
+        {copy(
+          'Проверьте оригинал, аудиторию, даты и право на публикацию. Релевантность правилам не подтверждает достоверность. Изменение текста снимает материал с выдачи до нового решения.',
+        )}
       </p>
+      <div className="stack">
+        <button
+          type="button"
+          className="button secondary"
+          disabled={busy || !detail.source.enabled}
+          onClick={() => void save('inspectContentPage', {})}
+        >
+          {busy ? copy('Подождите…') : copy('Проверить сроки и условия на сайте')}
+        </button>
+        <p className="muted small-text">
+          {copy(
+            'Результат сохраняется в журнале ниже и относится к выбранной редакции. Повторная проверка — не чаще раза в минуту. Формы и вложения не проверяются; текст и публикация не изменяются.',
+          )}
+        </p>
+      </div>
       <ActionFeedback error={error} success={success} />
       <form
         className="stack"
-        aria-label="Решение по материалу"
+        aria-label={copy('Решение по материалу')}
         key={`review-${detail.item.updatedAt}`}
         onSubmit={(event) => {
           event.preventDefault();
@@ -145,7 +204,7 @@ export function ContentEditor({
         }}
       >
         <label className="field">
-          Решение
+          {copy('Решение')}{' '}
           <select
             name="decision"
             defaultValue={
@@ -153,36 +212,41 @@ export function ContentEditor({
             }
           >
             {!terminal && detail.item.status !== 'published' && (
-              <option value="publish">Опубликовать проверенную редакцию</option>
+              <option value="publish">{copy('Опубликовать проверенную редакцию')}</option>
             )}
-            {!terminal && <option value="reject">Отклонить</option>}
-            {detail.item.status !== 'archived' && <option value="archive">В архив</option>}
-            {detail.item.status !== 'withdrawn' && <option value="withdraw">Отозвать</option>}
-            {terminal && <option value="reopen">Вернуть на проверку</option>}
+            {!terminal && <option value="reject">{copy('Отклонить')}</option>}
+            {detail.item.status !== 'archived' && (
+              <option value="archive">{copy('В архив')}</option>
+            )}
+            {detail.item.status !== 'withdrawn' && (
+              <option value="withdraw">{copy('Отозвать')}</option>
+            )}
+            {terminal && <option value="reopen">{copy('Вернуть на проверку')}</option>}
           </select>
         </label>
         <label className="field">
-          Актуально до (для публикации, максимум 90 дней)
+          {copy('Актуально до (для публикации, максимум 90 дней)')}{' '}
           <input name="expiresAt" type="datetime-local" defaultValue={defaultExpiry} />
         </label>
         <p className="small-text muted">
-          Более ранние срок подачи или дата события ограничат этот срок. Неизвестный дедлайн не
-          выдумывается.
+          {copy(
+            'Более ранние срок подачи или дата события ограничат этот срок. Неизвестный дедлайн не выдумывается.',
+          )}
         </p>
         <label className="field">
-          Обоснование решения
+          {copy('Обоснование решения')}{' '}
           <textarea name="reason" required minLength={10} maxLength={2000} />
         </label>
         <button className="button" disabled={busy}>
-          Сохранить решение
+          {copy('Сохранить решение')}
         </button>
       </form>
       {!terminal && latest && (
         <details>
-          <summary>Исправить материал перед публикацией</summary>
+          <summary>{copy('Исправить материал перед публикацией')}</summary>
           <form
             className="stack"
-            aria-label="Редактирование материала"
+            aria-label={copy('Редактирование материала')}
             key={latest.id}
             onSubmit={(event) => {
               event.preventDefault();
@@ -202,7 +266,7 @@ export function ContentEditor({
             }}
           >
             <label className="field">
-              Ссылка на оригинал
+              {copy('Ссылка на оригинал')}{' '}
               <input
                 name="url"
                 type="url"
@@ -211,7 +275,7 @@ export function ContentEditor({
               />
             </label>
             <label className="field">
-              Заголовок
+              {copy('Заголовок')}{' '}
               <input
                 name="title"
                 required
@@ -221,23 +285,23 @@ export function ContentEditor({
               />
             </label>
             <label className="field">
-              Краткое содержание
+              {copy('Краткое содержание')}{' '}
               <textarea name="summary" maxLength={600} defaultValue={latest.summary} />
             </label>
             <label className="field">
-              Категория
+              {copy('Категория')}{' '}
               <select name="category" defaultValue={latest.category}>
                 {[
-                  ['hackathon', 'Хакатон'],
-                  ['competition', 'Конкурс'],
-                  ['internship', 'Стажировка'],
-                  ['event', 'Мероприятие'],
-                  ['grant', 'Грант'],
-                  ['scholarship', 'Стипендия'],
-                  ['training', 'Обучение'],
-                  ['news', 'Новость'],
-                  ['article', 'Статья'],
-                  ['other', 'Другое'],
+                  ['hackathon', copy('Хакатон')],
+                  ['competition', copy('Конкурс')],
+                  ['internship', copy('Стажировка')],
+                  ['event', copy('Мероприятие')],
+                  ['grant', copy('Грант')],
+                  ['scholarship', copy('Стипендия')],
+                  ['training', copy('Обучение')],
+                  ['news', copy('Новость')],
+                  ['article', copy('Статья')],
+                  ['other', copy('Другое')],
                 ].map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -246,15 +310,15 @@ export function ContentEditor({
               </select>
             </label>
             <label className="field">
-              География
+              {copy('География')}{' '}
               <input name="geography" maxLength={120} defaultValue={latest.geography} />
             </label>
             <label className="field">
-              Язык
+              {copy('Язык')}{' '}
               <input name="language" maxLength={20} required defaultValue={latest.language} />
             </label>
             <label className="field">
-              Дата источника (если подтверждена)
+              {copy('Дата источника (если подтверждена)')}{' '}
               <input
                 name="publishedAt"
                 type="datetime-local"
@@ -262,7 +326,7 @@ export function ContentEditor({
               />
             </label>
             <label className="field">
-              Срок подачи (если подтверждён)
+              {copy('Срок подачи (если подтверждён)')}{' '}
               <input
                 name="deadline"
                 type="datetime-local"
@@ -270,7 +334,7 @@ export function ContentEditor({
               />
             </label>
             <label className="field">
-              Дата события (если подтверждена)
+              {copy('Дата события (если подтверждена)')}{' '}
               <input
                 name="eventDate"
                 type="datetime-local"
@@ -278,34 +342,38 @@ export function ContentEditor({
               />
             </label>
             <label className="field">
-              Причина изменения
+              {copy('Причина изменения')}{' '}
               <textarea name="reason" required minLength={10} maxLength={2000} />
             </label>
             <button className="button secondary" disabled={busy}>
-              Сохранить новую редакцию
+              {copy('Сохранить новую редакцию')}
             </button>
           </form>
         </details>
       )}
       <details>
-        <summary>История редакций ({detail.historyTotal}) и сравнение</summary>
+        <summary>
+          {copy('История редакций (')}
+          {detail.historyTotal}
+          {copy(') и сравнение')}
+        </summary>
         <div className="form-grid">
           <label className="field">
-            Первая редакция
+            {copy('Первая редакция')}{' '}
             <select value={first?.id ?? ''} onChange={(event) => setLeft(event.target.value)}>
               {detail.history.map((rev) => (
                 <option key={rev.id} value={rev.id}>
-                  № {rev.number} · {rev.origin}
+                  № {rev.number} · {adminCodeLabel(rev.origin, locale)}
                 </option>
               ))}
             </select>
           </label>
           <label className="field">
-            Вторая редакция
+            {copy('Вторая редакция')}{' '}
             <select value={second?.id ?? ''} onChange={(event) => setRight(event.target.value)}>
               {detail.history.map((rev) => (
                 <option key={rev.id} value={rev.id}>
-                  № {rev.number} · {rev.origin}
+                  № {rev.number} · {adminCodeLabel(rev.origin, locale)}
                 </option>
               ))}
             </select>
@@ -317,22 +385,34 @@ export function ContentEditor({
               rev && (
                 <article className="summary-card stack" key={index}>
                   <strong>
-                    Редакция {rev.number}: {rev.title}
+                    {copy('Редакция')} {rev.number}: <span lang="und">{rev.title}</span>
                   </strong>
-                  <p>{rev.summary}</p>
                   <p>
-                    {rev.category} · {rev.geography || 'География не установлена'} · {rev.language}
+                    <span lang="und">{rev.summary}</span>
+                  </p>
+                  <p>
+                    {localizedOpportunityCategoryLabels(locale)[rev.category] ?? rev.category} ·{' '}
+                    {rev.geography || copy('География не установлена')} · {rev.language}
                   </p>
                   <p className="small-text">
-                    {rev.canonicalUrl ?? 'Историческая ссылка не сохранена'}
+                    {rev.canonicalUrl ?? copy('Историческая ссылка не сохранена')}
                   </p>
                   <p>
-                    Источник:{' '}
-                    {rev.publishedAt ? date(rev.publishedAt, true) : 'дата не установлена'}. Подача:{' '}
-                    {rev.deadline ? date(rev.deadline, true) : 'срок не установлен'}. Событие:{' '}
-                    {rev.eventDate ? date(rev.eventDate, true) : 'дата не установлена'}.
+                    {copy('Источник:')}{' '}
+                    {rev.publishedAt
+                      ? date(rev.publishedAt, true, locale)
+                      : copy('дата не установлена')}
+                    {copy('. Подача:')}{' '}
+                    {rev.deadline ? date(rev.deadline, true, locale) : copy('срок не установлен')}
+                    {copy('. Событие:')}{' '}
+                    {rev.eventDate
+                      ? date(rev.eventDate, true, locale)
+                      : copy('дата не установлена')}
+                    .
                   </p>
-                  <p className="muted small-text">Сохранено: {date(rev.createdAt, true)}</p>
+                  <p className="muted small-text">
+                    {copy('Сохранено:')} {date(rev.createdAt, true, locale)}
+                  </p>
                 </article>
               ),
           )}
@@ -343,28 +423,32 @@ export function ContentEditor({
             disabled={page === 1 || busy}
             onClick={() => setPage(page - 1)}
           >
-            Новые редакции
+            {copy('Новые редакции')}
           </button>
-          <span>Страница истории {page}</span>
+          <span>
+            {copy('Страница истории')} {page}
+          </span>
           <button
             className="button secondary"
             disabled={page * 20 >= detail.historyTotal || busy}
             onClick={() => setPage(page + 1)}
           >
-            Старые редакции
+            {copy('Старые редакции')}
           </button>
         </div>
       </details>
       <details>
-        <summary>Последние решения и изменения</summary>
+        <summary>{copy('Последние решения и изменения')}</summary>
         {detail.audits.map((audit) => (
           <article className="summary-card" key={audit.id}>
-            <strong>{audit.action}</strong>
-            <p>{audit.reason}</p>
+            <strong>{adminCodeLabel(audit.action, locale)}</strong>
+            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              <span lang="und">{audit.reason}</span>
+            </p>
             <p className="small-text">
-              {date(audit.createdAt, true)} ·{' '}
-              {audit.actorId ? `Администратор ${audit.actorId}` : 'Система'} · редакция{' '}
-              {audit.revisionId ?? 'не указана'}
+              {date(audit.createdAt, true, locale)} ·{' '}
+              {audit.actorId ? `${copy('Администратор')} ${audit.actorId}` : copy('Система')}{' '}
+              {copy('· редакция')} {audit.revisionId ?? copy('не указана')}
             </p>
           </article>
         ))}

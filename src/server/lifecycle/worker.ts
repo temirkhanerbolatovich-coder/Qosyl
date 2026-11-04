@@ -1,4 +1,6 @@
 import 'server-only';
+import { getNotificationLanguage } from '@/server/notification-language';
+import { lifecycleNotificationText } from '@/lib/notification-language';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { planProjectLifecycle } from '@/lib/lifecycle-policy';
 
@@ -130,8 +132,20 @@ export async function runProjectLifecycle(database: PrismaClient, options: Lifec
               expiredProjects += 1;
             }
             if (plan.notifications.length) {
+              const localized = [];
+              for (const notice of plan.notifications) {
+                localized.push({
+                  ...notice,
+                  text: lifecycleNotificationText(
+                    await getNotificationLanguage(tx, notice.userId),
+                    notice.kind,
+                    project.title,
+                    notice.text,
+                  ),
+                });
+              }
               const created = await tx.notification.createMany({
-                data: plan.notifications.map(({ userId, text, url, dedupeKey }) => ({
+                data: localized.map(({ userId, text, url, dedupeKey }) => ({
                   userId,
                   text,
                   url,

@@ -2,6 +2,8 @@ import 'server-only';
 import { Prisma, type User, type Project } from '@prisma/client';
 import { assert, isParticipant, requireRole } from '@/lib/permissions';
 import type { ProjectInput } from '@/lib/validation';
+import { notificationText } from '@/lib/notification-language';
+import { getNotificationLanguage } from '@/server/notification-language';
 
 export type Tx = Prisma.TransactionClient;
 export async function event(
@@ -15,7 +17,11 @@ export async function event(
 }
 export async function notify(tx: Tx, userId: string, text: string, projectId?: string) {
   await tx.notification.create({
-    data: { userId, text, url: projectId ? `/work/${projectId}` : '/dashboard' },
+    data: {
+      userId,
+      text: notificationText(await getNotificationLanguage(tx, userId), text),
+      url: projectId ? `/work/${projectId}` : '/dashboard',
+    },
   });
 }
 export async function moderation(

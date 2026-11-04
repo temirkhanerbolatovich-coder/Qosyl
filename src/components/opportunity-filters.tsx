@@ -1,10 +1,25 @@
 'use client';
-import { opportunityCategoryLabels, specialtyLabels } from '@/lib/opportunity-search';
-export function OpportunityFilters({ onSearch }: { onSearch: (query: string) => void }) {
+import {
+  localizedOpportunityCategoryLabels,
+  localizedSpecialtyLabels,
+} from '@/lib/localized-opportunity-labels';
+import type { SavedOpportunityFilters } from '@/lib/opportunity-saved';
+import { useI18n } from './locale-provider';
+export function OpportunityFilters({
+  onSearch,
+  initialFilters,
+}: {
+  onSearch: (query: string) => void;
+  initialFilters?: SavedOpportunityFilters;
+}) {
+  const { locale, t } = useI18n();
+  const opportunityCategoryLabels = localizedOpportunityCategoryLabels(locale);
+  const specialtyLabels = localizedSpecialtyLabels(locale);
   return (
     <form
+      lang={locale}
       className="panel stack"
-      aria-label="Поиск возможностей"
+      aria-label={t('Поиск возможностей', 'Мүмкіндіктерді іздеу')}
       onSubmit={(event) => {
         event.preventDefault();
         const fields = new FormData(event.currentTarget);
@@ -15,14 +30,22 @@ export function OpportunityFilters({ onSearch }: { onSearch: (query: string) => 
       }}
     >
       <label className="field">
-        Что ищете?
-        <input name="q" maxLength={100} placeholder="Грант, стажировка, медицина, дизайн…" />
+        {t('Что ищете?', 'Не іздейсіз?')}
+        <input
+          name="q"
+          maxLength={100}
+          defaultValue={initialFilters?.q ?? ''}
+          placeholder={t(
+            'Грант, стажировка, медицина, дизайн…',
+            'Грант, тағылымдама, медицина, дизайн…',
+          )}
+        />
       </label>
       <div className="form-grid">
         <label className="field">
-          Тип возможности
-          <select name="category">
-            <option value="">Все типы</option>
+          {t('Тип возможности', 'Мүмкіндік түрі')}
+          <select name="category" defaultValue={initialFilters?.category ?? ''}>
+            <option value="">{t('Все типы', 'Барлық түрі')}</option>
             {Object.entries(opportunityCategoryLabels).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
@@ -31,9 +54,9 @@ export function OpportunityFilters({ onSearch }: { onSearch: (query: string) => 
           </select>
         </label>
         <label className="field">
-          Направление
-          <select name="specialty">
-            <option value="">Все специальности</option>
+          {t('Направление', 'Бағыт')}
+          <select name="specialty" defaultValue={initialFilters?.specialty ?? ''}>
+            <option value="">{t('Все специальности', 'Барлық мамандық')}</option>
             {Object.entries(specialtyLabels).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
@@ -43,14 +66,21 @@ export function OpportunityFilters({ onSearch }: { onSearch: (query: string) => 
         </label>
       </div>
       <label className="field">
-        Регион или онлайн
-        <input name="geography" maxLength={120} placeholder="Только явно указанный регион" />
+        {t('Регион или онлайн', 'Өңір немесе онлайн')}
+        <input
+          name="geography"
+          maxLength={120}
+          defaultValue={initialFilters?.geography ?? ''}
+          placeholder={t('Только явно указанный регион', 'Тек нақты көрсетілген өңір')}
+        />
       </label>
       <p className="muted small-text">
-        Направление определяется по словам в материале. Условия участия и неизвестные сроки
-        проверяйте у организатора.
+        {t(
+          'Направление определяется по словам в материале. Условия участия и неизвестные сроки проверяйте у организатора.',
+          'Бағыт материалдағы сөздер бойынша анықталады. Қатысу шарттары мен белгісіз мерзімдерді ұйымдастырушыдан нақтылаңыз.',
+        )}
       </p>
-      <button className="button secondary">Найти возможности</button>
+      <button className="button secondary">{t('Найти возможности', 'Мүмкіндіктерді табу')}</button>
     </form>
   );
 }

@@ -1,8 +1,15 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import { OpportunityFilters } from './opportunity-filters';
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import type { ContentIntakeData } from '@/contracts/content-intake';
+import {
+  contentIntakeDataSchema,
+  contentMutationDataSchema,
+  type ContentIntakeData,
+} from '@/contracts/content-intake';
+import { requestClientData, CLIENT_WRITE_REFRESH_ERROR } from '@/lib/client-data-response';
 import { ActionFeedback, LoadState } from './platform';
+import { adminCodeLabel } from '@/lib/admin-labels';
 import { date } from '@/lib/labels';
 import { ContentEditor } from './content-editor';
 
@@ -12,19 +19,15 @@ async function readContentIntake(
   signal?: AbortSignal,
   filters = '',
 ): Promise<ContentIntakeData> {
-  const response = await fetch(
+  return requestClientData(
+    contentIntakeDataSchema,
     `/api/admin/content?page=${page}${status ? `&status=${status}` : ''}${filters ? `&${filters}` : ''}`,
-    {
-      cache: 'no-store',
-      signal: signal ?? AbortSignal.timeout(20000),
-    },
+    { signal: signal ?? AbortSignal.timeout(20000) },
   );
-  const body = await response.json();
-  if (!response.ok || !body.data) throw new Error(body.error || 'Не удалось прочитать очередь.');
-  return body.data;
 }
 
 export function ContentIntakePanel() {
+  const { locale, copy } = useMarketplaceCopy();
   const [data, setData] = useState<ContentIntakeData | null>(null);
   const [error, setError] = useState(''),
     [success, setSuccess] = useState(''),
@@ -37,8 +40,10 @@ export function ContentIntakePanel() {
     try {
       setData(await readContentIntake(page, status, undefined, filters));
       setError('');
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Ошибка загрузки.');
+      return false;
     }
   }, [page, status, filters]);
   useEffect(() => {
@@ -69,24 +74,30 @@ export function ContentIntakePanel() {
     setBusy(true);
     setError('');
     setSuccess('');
+    let committed = false;
     try {
-      const response = await fetch('/api/admin/content', {
+      const result = await requestClientData(contentMutationDataSchema, '/api/admin/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...fields }),
         signal: AbortSignal.timeout(20000),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Действие не выполнено.');
+      committed = true;
+      if (!(await refresh())) throw new Error(CLIENT_WRITE_REFRESH_ERROR);
       setSuccess(
-        body.data.runId
+        'runId' in result
           ? 'Импорт поставлен в очередь. Обновите список после прохода worker.'
           : 'Сохранено. Публикация не выполнялась.',
       );
-      await refresh();
       return true;
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Ошибка сохранения.');
+      setError(
+        committed
+          ? CLIENT_WRITE_REFRESH_ERROR
+          : error instanceof Error
+            ? error.message
+            : 'Ошибка сохранения.',
+      );
       return false;
     } finally {
       setBusy(false);
@@ -94,17 +105,24 @@ export function ContentIntakePanel() {
   }
   if (!data) return <LoadState error={error} retry={refresh} />;
   return (
-    <section className="stack content-intake" aria-label="Закрытый сбор возможностей">
+    <section
+      lang={locale}
+      className="stack content-intake"
+      aria-label={copy('Закрытый сбор возможностей')}
+    >
       <div className="panel stack">
-        <h2>Закрытый сбор возможностей</h2>
+        <h2>{copy('Закрытый сбор возможностей')}</h2>
         <p>
-          Импорт сохраняет материалы для проверки. В публичную ленту попадает только редакция,
-          которую администратор одобрил с указанием срока актуальности.
+          {copy(
+            'Импорт сохраняет материалы для проверки. В публичную ленту попадает только редакция, которую администратор одобрил с указанием срока актуальности.',
+          )}
         </p>
         <p>
-          Сбор: <strong>{data.settings.enabled ? 'включён' : 'выключен'}</strong>. Выключение
-          запрещает новые внешние запросы и скрывает публичную ленту; результат уже начатого запроса
-          не сохраняется.
+          {copy('Сбор:')}{' '}
+          <strong>{data.settings.enabled ? copy('включён') : copy('выключен')}</strong>
+          {copy(
+            '. Выключение запрещает новые внешние запросы и скрывает публичную ленту; результат уже начатого запроса не сохраняется.',
+          )}
         </p>
         <div className="button-row">
           <button
@@ -112,17 +130,17 @@ export function ContentIntakePanel() {
             disabled={busy}
             onClick={() => void run('setModuleEnabled', { enabled: !data.settings.enabled })}
           >
-            {data.settings.enabled ? 'Выключить сбор' : 'Включить сбор'}
+            {data.settings.enabled ? copy('Выключить сбор') : copy('Включить сбор')}
           </button>
           <button className="button secondary" disabled={busy} onClick={() => void refresh()}>
-            Обновить очередь
+            {copy('Обновить очередь')}
           </button>
         </div>
         <ActionFeedback error={error} success={success} />
       </div>
       <form
         className="panel stack"
-        aria-label="Добавление источника"
+        aria-label={copy('Добавление источника')}
         onSubmit={async (event) => {
           event.preventDefault();
           const form = event.currentTarget;
@@ -145,55 +163,57 @@ export function ContentIntakePanel() {
             form.reset();
         }}
       >
-        <h3>Добавить источник</h3>
+        <h3>{copy('Добавить источник')}</h3>
         <div className="form-grid">
           <label className="field">
-            Название
-            <input name="name" required minLength={3} maxLength={100} />
+            {copy('Название')} <input name="name" required minLength={3} maxLength={100} />
           </label>
           <label className="field">
-            Тип
+            {copy('Тип')}{' '}
             <select name="type">
-              <option value="manual">Ручной ввод</option>
+              <option value="manual">{copy('Ручной ввод')}</option>
               <option value="rss">RSS / Atom</option>
-              <option value="html">Сайт / HTML</option>
+              <option value="html">{copy('Сайт / HTML')}</option>
             </select>
           </label>
         </div>
         <label className="field">
-          Разрешённый домен
+          {copy('Разрешённый домен')}{' '}
           <input name="allowedHost" required placeholder="example.org" />
         </label>
         <label className="field">
-          HTTPS-адрес RSS или страницы сайта
-          <input name="feedUrl" type="url" />
+          {copy('HTTPS-адрес RSS или страницы сайта')} <input name="feedUrl" type="url" />
         </label>
         <label className="field">
-          Условия использования: ссылка
-          <input name="termsUrl" type="url" />
+          {copy('Условия использования: ссылка')} <input name="termsUrl" type="url" />
         </label>
         <label className="field">
-          Основание использования и ограничения
+          {copy('Основание использования и ограничения')}{' '}
           <textarea name="rightsNote" required minLength={10} maxLength={2000} />
         </label>
         <button className="button" disabled={busy}>
-          Добавить выключенный источник
+          {copy('Добавить выключенный источник')}
         </button>
       </form>
       <div className="panel stack">
-        <h3>Источники</h3>
-        {!data.sources.length && <p>Источники пока не добавлены.</p>}
+        <h3>{copy('Источники')}</h3>
+        {!data.sources.length && <p>{copy('Источники пока не добавлены.')}</p>}
         {data.sources.map((source) => (
           <article className="summary-card stack" key={source.id}>
             <strong>
-              {source.name} · {source.type} · {source.enabled ? 'включён' : 'выключен'}
+              <span lang="und">{source.name}</span> · {adminCodeLabel(source.type, locale)} ·{' '}
+              {source.enabled ? copy('включён') : copy('выключен')}
             </strong>
             <p>{source.allowedHost}</p>
-            <p className="muted small-text">{source.rightsNote}</p>
+            <p className="muted small-text">
+              <span lang="und">{source.rightsNote}</span>
+            </p>
             <p>
-              Последняя проверка:{' '}
-              {source.lastCheckedAt ? date(source.lastCheckedAt, true) : 'не выполнялась'}. Ошибок
-              подряд: {source.consecutiveErrors}.
+              {copy('Последняя проверка:')}{' '}
+              {source.lastCheckedAt
+                ? date(source.lastCheckedAt, true, locale)
+                : copy('не выполнялась')}
+              {copy('. Ошибок подряд:')} {source.consecutiveErrors}.
             </p>
             <div className="button-row">
               <button
@@ -203,7 +223,7 @@ export function ContentIntakePanel() {
                   void run('setSourceEnabled', { sourceId: source.id, enabled: !source.enabled })
                 }
               >
-                {source.enabled ? 'Отключить источник' : 'Включить источник'}
+                {source.enabled ? copy('Отключить источник') : copy('Включить источник')}
               </button>
               {['rss', 'html'].includes(source.type) && (
                 <button
@@ -211,7 +231,7 @@ export function ContentIntakePanel() {
                   disabled={busy || !source.enabled || !data.settings.enabled}
                   onClick={() => void run('requestSync', { sourceId: source.id })}
                 >
-                  Поставить импорт в очередь
+                  {copy('Поставить импорт в очередь')}
                 </button>
               )}
             </div>
@@ -220,7 +240,7 @@ export function ContentIntakePanel() {
       </div>
       <form
         className="panel stack"
-        aria-label="Ручной материал"
+        aria-label={copy('Ручной материал')}
         onSubmit={async (event) => {
           event.preventDefault();
           const form = event.currentTarget,
@@ -239,9 +259,9 @@ export function ContentIntakePanel() {
             form.reset();
         }}
       >
-        <h3>Ручной материал</h3>
+        <h3>{copy('Ручной материал')}</h3>
         <label className="field">
-          Ручной источник
+          {copy('Ручной источник')}{' '}
           <select name="sourceId" required>
             {data.sources
               .filter((s) => s.type === 'manual' && s.enabled)
@@ -253,30 +273,27 @@ export function ContentIntakePanel() {
           </select>
         </label>
         <label className="field">
-          Ссылка на оригинал
-          <input name="url" type="url" required />
+          {copy('Ссылка на оригинал')} <input name="url" type="url" required />
         </label>
         <label className="field">
-          Заголовок
-          <input name="title" required minLength={8} maxLength={200} />
+          {copy('Заголовок')} <input name="title" required minLength={8} maxLength={200} />
         </label>
         <label className="field">
-          Краткое содержание
-          <textarea name="summary" maxLength={600} />
+          {copy('Краткое содержание')} <textarea name="summary" maxLength={600} />
         </label>
         <label className="field">
-          Категория
+          {copy('Категория')}{' '}
           <select name="category">
-            <option value="hackathon">Хакатон</option>
-            <option value="competition">Конкурс</option>
-            <option value="internship">Стажировка</option>
-            <option value="event">Мероприятие</option>
-            <option value="grant">Грант</option>
-            <option value="scholarship">Стипендия</option>
-            <option value="training">Обучение</option>
-            <option value="news">Новость</option>
-            <option value="article">Статья</option>
-            <option value="other">Требует классификации</option>
+            <option value="hackathon">{copy('Хакатон')}</option>
+            <option value="competition">{copy('Конкурс')}</option>
+            <option value="internship">{copy('Стажировка')}</option>
+            <option value="event">{copy('Мероприятие')}</option>
+            <option value="grant">{copy('Грант')}</option>
+            <option value="scholarship">{copy('Стипендия')}</option>
+            <option value="training">{copy('Обучение')}</option>
+            <option value="news">{copy('Новость')}</option>
+            <option value="article">{copy('Статья')}</option>
+            <option value="other">{copy('Требует классификации')}</option>
           </select>
         </label>
         <button
@@ -287,11 +304,13 @@ export function ContentIntakePanel() {
             !data.sources.some((s) => s.type === 'manual' && s.enabled)
           }
         >
-          Сохранить в закрытую очередь
+          {copy('Сохранить в закрытую очередь')}
         </button>
       </form>
       <div className="panel stack">
-        <h3>Материалы: {data.total}</h3>
+        <h3>
+          {copy('Материалы:')} {data.total}
+        </h3>
         <OpportunityFilters
           onSearch={(query) => {
             setFilters(query);
@@ -299,7 +318,7 @@ export function ContentIntakePanel() {
           }}
         />
         <label className="field">
-          Раздел материалов
+          {copy('Раздел материалов')}{' '}
           <select
             value={status}
             onChange={(event) => {
@@ -307,38 +326,42 @@ export function ContentIntakePanel() {
               setPage(1);
             }}
           >
-            <option value="">Все материалы</option>
-            <option value="pending_review">На проверке</option>
-            <option value="published">Опубликованные</option>
-            <option value="rejected">Отклонённые</option>
-            <option value="archived">Архив</option>
-            <option value="withdrawn">Отозванные</option>
+            <option value="">{copy('Все материалы')}</option>
+            <option value="pending_review">{copy('На проверке')}</option>
+            <option value="published">{copy('Опубликованные')}</option>
+            <option value="rejected">{copy('Отклонённые')}</option>
+            <option value="archived">{copy('Архив')}</option>
+            <option value="withdrawn">{copy('Отозванные')}</option>
           </select>
         </label>
         {data.items.map((item) => (
           <Fragment key={item.id}>
             <article className="summary-card stack">
-              <strong>{item.revisions[0]?.title ?? item.id}</strong>
-              <p>{item.revisions[0]?.summary}</p>
+              <strong>
+                <span lang="und">{item.revisions[0]?.title ?? item.id}</span>
+              </strong>
+              <p>
+                <span lang="und">{item.revisions[0]?.summary}</span>
+              </p>
               <p className="muted small-text">
-                {item.status} · редакция {item.revisions[0]?.number} · релевантность{' '}
-                {item.revisions[0]?.score}/100
+                {adminCodeLabel(item.status, locale)} {copy('· редакция')}{' '}
+                {item.revisions[0]?.number} {copy('· релевантность')} {item.revisions[0]?.score}/100
               </p>
               <a href={item.canonicalUrl} target="_blank" rel="noopener noreferrer">
-                Оригинал
+                {copy('Оригинал')}
               </a>
               <p className="muted small-text">
-                Дата источника:{' '}
+                {copy('Дата источника:')}{' '}
                 {item.revisions[0]?.publishedAt
-                  ? date(item.revisions[0].publishedAt, true)
-                  : 'не установлена'}
+                  ? date(item.revisions[0].publishedAt, true, locale)
+                  : copy('не установлена')}
                 .{' '}
                 {item.revisions[0]?.deadline
-                  ? `Срок подачи: ${date(item.revisions[0].deadline, true)}.`
-                  : 'Срок подачи не подтверждён.'}
+                  ? `${locale === 'kk' ? 'Өтінім мерзімі:' : 'Срок подачи:'} ${date(item.revisions[0].deadline, true, locale)}.`
+                  : copy('Срок подачи не подтверждён.')}
               </p>
               <button className="button secondary" onClick={() => setSelected(item.id)}>
-                Проверить и открыть историю
+                {copy('Проверить и открыть историю')}
               </button>
             </article>
             {selected === item.id && (
@@ -357,28 +380,38 @@ export function ContentIntakePanel() {
             disabled={page === 1 || busy}
             onClick={() => setPage(page - 1)}
           >
-            Назад
+            {copy('Назад')}
           </button>
-          <span>Страница {page}</span>
+          <span>
+            {copy('Страница')} {page}
+          </span>
           <button
             className="button secondary"
             disabled={page * 20 >= data.total || busy}
             onClick={() => setPage(page + 1)}
           >
-            Далее
+            {copy('Далее')}
           </button>
         </div>
       </div>
       <div className="panel stack">
-        <h3>Запуски импорта</h3>
+        <h3>{copy('Запуски импорта')}</h3>
         {data.runs.map((run) => (
           <article className="summary-card" key={run.id}>
-            <strong>{run.status}</strong>
+            <strong>{adminCodeLabel(run.status, locale)}</strong>
             <p>
-              {date(run.requestedAt, true)}. Найдено: {run.found}; новых: {run.created}; редакций:{' '}
-              {run.updated}; дублей: {run.duplicates}; отсеяно: {run.discarded}.
+              {date(run.requestedAt, true, locale)}
+              {copy('. Найдено:')} {run.found}
+              {copy('; новых:')} {run.created}
+              {copy('; редакций:')} {run.updated}
+              {copy('; дублей:')} {run.duplicates}
+              {copy('; отсеяно:')} {run.discarded}.
             </p>
-            {run.errorCode && <p>Код ошибки: {run.errorCode}</p>}
+            {run.errorCode && (
+              <p>
+                {copy('Код ошибки:')} {run.errorCode}
+              </p>
+            )}
           </article>
         ))}
       </div>

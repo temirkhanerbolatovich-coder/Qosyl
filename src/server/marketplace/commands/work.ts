@@ -1,4 +1,6 @@
 import 'server-only';
+import { getNotificationLanguage } from '@/server/notification-language';
+import { notificationText } from '@/lib/notification-language';
 import type { User } from '@prisma/client';
 import type { Action } from '@/lib/validation';
 import { mutationSchemas } from '@/lib/validation';
@@ -120,13 +122,39 @@ export async function workCommands(
       break;
     }
     case 'submitDeliverable': {
-      const { projectId, links, notes } = mutationSchemas.submitDeliverable.parse(raw);
+      const { projectId, links, notes, attachmentIds } =
+        mutationSchemas.submitDeliverable.parse(raw);
+      // Upload/delete serialize on this row too, so files cannot disappear during submission.
+      await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} FOR UPDATE`;
       const project = await loadProject(tx, projectId);
       student(project, user);
       requireState(project.status, ['in_progress', 'changes_requested']);
+      if (attachmentIds.length) {
+        const agreed = await tx.agreementVersion.findFirst({
+          where: { projectId, clientApprovedAt: { not: null }, studentApprovedAt: { not: null } },
+          select: { id: true },
+        });
+        assert(agreed, 409, 'Для передачи файлов нужны подтверждённые обеими сторонами условия.');
+        const available = await tx.projectAttachment.count({
+          where: { id: { in: attachmentIds }, projectId, uploaderId: user.id },
+        });
+        assert(
+          available === attachmentIds.length,
+          404,
+          'Файл результата недоступен. Обновите рабочую область.',
+        );
+      }
       const submission = await tx.submission.create({
         data: { projectId, studentId: user.id, links, notes },
       });
+      if (attachmentIds.length)
+        await tx.submissionAttachment.createMany({
+          data: attachmentIds.map((attachmentId) => ({
+            projectId,
+            submissionId: submission.id,
+            attachmentId,
+          })),
+        });
       await tx.project.update({ where: { id: projectId }, data: { status: 'submitted' } });
       await event(tx, projectId, user.id, action, { submissionId: submission.id });
       await notify(tx, project.clientId, 'Результат сдан. Проверьте критерии приемки.', projectId);
@@ -312,7 +340,10 @@ export async function workCommands(
           await tx.notification.create({
             data: {
               userId: application.studentId,
-              text: 'Заказ отменён автором. Ваш отклик закрыт.',
+              text: notificationText(
+                await getNotificationLanguage(tx, application.studentId),
+                'Заказ отменён автором. Ваш отклик закрыт.',
+              ),
               url: '/student/applications',
             },
           });

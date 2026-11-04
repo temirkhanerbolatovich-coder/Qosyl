@@ -1,8 +1,18 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ThreadsSearch } from './threads-search';
-import type { LeadListData, LeadDetailData } from '@/contracts/leads';
+import {
+  leadListDataSchema,
+  leadDetailDataSchema,
+  leadMutationDataSchema,
+  type LeadListData,
+  type LeadDetailData,
+} from '@/contracts/leads';
+import { requestClientData, CLIENT_WRITE_REFRESH_ERROR } from '@/lib/client-data-response';
+import type { z } from 'zod';
+import { adminCodeLabel } from '@/lib/admin-labels';
 import { date } from '@/lib/labels';
 import { ActionFeedback, LoadState } from './platform';
 
@@ -19,21 +29,22 @@ const localDate = (value: string) => {
   const time = new Date(value);
   return new Date(time.getTime() - time.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
-async function request<T>(url: string, body?: Record<string, unknown>): Promise<T> {
-  const response = await fetch(url, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(20000),
-    ...(body
+async function request<S extends z.ZodType>(
+  schema: S,
+  url: string,
+  body?: Record<string, unknown>,
+) {
+  return requestClientData(
+    schema,
+    url,
+    body
       ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         }
-      : {}),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Не удалось выполнить действие.');
-  return result.data;
+      : undefined,
+  );
 }
 function LeadRecord({
   id,
@@ -43,9 +54,10 @@ function LeadRecord({
 }: {
   id: string;
   registry: LeadListData;
-  onSaved: () => Promise<void>;
+  onSaved: () => Promise<boolean>;
   onClose: () => void;
 }) {
+  const { locale, copy } = useMarketplaceCopy();
   const [data, setData] = useState<LeadDetailData | null>(null),
     [page, setPage] = useState(1),
     [action, setAction] = useState('addLeadNote');
@@ -55,7 +67,7 @@ function LeadRecord({
   const url = `/api/admin/leads/${encodeURIComponent(id)}?page=${page}`;
   useEffect(() => {
     let active = true;
-    void request<LeadDetailData>(url)
+    void request(leadDetailDataSchema, url)
       .then((result) => {
         if (active) {
           setData(result);
@@ -69,62 +81,92 @@ function LeadRecord({
       active = false;
     };
   }, [url]);
-  if (!data) return <LoadState error={error} />;
+  async function reloadDetail() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      setData(await request(leadDetailDataSchema, url));
+      setError('');
+      setSuccess('');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Ошибка чтения.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!data) return <LoadState error={error} retry={reloadDetail} />;
   const lead = data.lead;
   const actions = [
-    ['addLeadNote', 'Добавить заметку'],
-    ['assignLead', 'Сменить ответственного'],
+    ['addLeadNote', copy('Добавить заметку')],
+    ['assignLead', copy('Сменить ответственного')],
   ];
   if (lead.status === 'new')
     actions.push(
-      ['editLead', 'Исправить описание и срок'],
-      ['verifyLead', 'Зафиксировать проверку'],
+      ['editLead', copy('Исправить описание и срок')],
+      ['verifyLead', copy('Зафиксировать проверку')],
     );
-  if (lead.status === 'verified') actions.push(['recordContact', 'Записать итог ручного контакта']);
+  if (lead.status === 'verified')
+    actions.push(['recordContact', copy('Записать итог ручного контакта')]);
   if (lead.status === 'contacted' && lead.kind === 'business_request')
-    actions.push(['recordConsent', 'Записать согласие и передать заказчику']);
-  if (lead.status === 'consented') actions.push(['revokeConsent', 'Отозвать передачу']);
+    actions.push(['recordConsent', copy('Записать согласие и передать заказчику')]);
+  if (lead.status === 'consented') actions.push(['revokeConsent', copy('Отозвать передачу')]);
   if (lead.status !== 'converted') {
-    actions.push(['closeLead', 'Зафиксировать отказ или архив']);
-    if (lead.status !== 'new') actions.push(['reopenLead', 'Вернуть на проверку']);
+    actions.push(['closeLead', copy('Зафиксировать отказ или архив')]);
+    if (lead.status !== 'new') actions.push(['reopenLead', copy('Вернуть на проверку')]);
   }
   return (
-    <section className="panel stack content-editor" aria-label="Карточка приватного лида">
+    <section
+      lang={locale}
+      className="panel stack content-editor"
+      aria-label={copy('Карточка приватного лида')}
+    >
       <div className="button-row">
-        <h3>{lead.title}</h3>
+        <h3>
+          <span lang="und">{lead.title}</span>
+        </h3>
+        <button className="button secondary" disabled={busy} onClick={() => void reloadDetail()}>
+          {copy('Обновить карточку')}
+        </button>
         <button className="button secondary" onClick={onClose}>
-          Закрыть карточку
+          {copy('Закрыть карточку')}
         </button>
       </div>
       <p>
-        {labels[lead.status]} · версия {lead.version} · актуален до {date(lead.expiresAt, true)}
+        {copy(labels[lead.status])} {copy('· версия')} {lead.version} {copy('· актуален до')}{' '}
+        {date(lead.expiresAt, true, locale)}
       </p>
-      <p>{lead.summary}</p>
+      <p>
+        <span lang="und">{lead.summary}</span>
+      </p>
       <a href={lead.sourceUrl} target="_blank" rel="noopener noreferrer">
-        Оригинал: {lead.sourceName}
+        {copy('Оригинал:')} <span lang="und">{lead.sourceName}</span>
       </a>
       <p>
-        Проверка: {lead.verifiedAt ? date(lead.verifiedAt, true) : 'не записана'}. Ручной контакт:{' '}
-        {lead.contactedAt ? date(lead.contactedAt, true) : 'не записан'}.
+        {copy('Проверка:')}{' '}
+        {lead.verifiedAt ? date(lead.verifiedAt, true, locale) : copy('не записана')}
+        {copy('. Ручной контакт:')}{' '}
+        {lead.contactedAt ? date(lead.contactedAt, true, locale) : copy('не записан')}.
       </p>
       {lead.consentEvidence && (
         <p>
-          Основание согласия: {lead.consentEvidence}. Заказчик: {lead.clientId}.
+          {copy('Основание согласия:')} <span lang="und">{lead.consentEvidence}</span>
+          {copy('. Заказчик:')} {lead.clientId}.
         </p>
       )}
       {lead.projectId && (
         <Link className="text-link" href={`/projects/${lead.projectId}`}>
-          Открыть созданный заказ →
+          {copy('Открыть созданный заказ →')}
         </Link>
       )}
       <p className="muted small-text">
-        Это внутренний учёт действий человека. Программа не отправляет сообщения и не подтверждает
-        согласие самостоятельно. Не сохраняйте пароли и лишние персональные данные.
+        {copy(
+          'Это внутренний учёт действий человека. Программа не отправляет сообщения и не подтверждает согласие самостоятельно. Не сохраняйте пароли и лишние персональные данные.',
+        )}
       </p>
       <ActionFeedback error={error} success={success} />
       <form
         className="stack"
-        aria-label="Действие по лиду"
+        aria-label={copy('Действие по лиду')}
         key={lead.version}
         onSubmit={async (event) => {
           event.preventDefault();
@@ -133,6 +175,7 @@ function LeadRecord({
           setBusy(true);
           setError('');
           setSuccess('');
+          let committed = false;
           try {
             const reason = String(form.get('reason') || '');
             let fields: Record<string, unknown> = { reason };
@@ -148,36 +191,44 @@ function LeadRecord({
                 sourceName: form.get('sourceName'),
                 expiresAt: new Date(String(form.get('expiresAt'))).toISOString(),
               };
-            await request('/api/admin/leads', {
+            await request(leadMutationDataSchema, '/api/admin/leads', {
               action,
               leadId: id,
               expectedVersion: lead.version,
               ...fields,
             });
-            setData(await request<LeadDetailData>(url));
-            await onSaved();
+            committed = true;
+            const updated = await request(leadDetailDataSchema, url);
+            if (!(await onSaved())) throw new Error(CLIENT_WRITE_REFRESH_ERROR);
+            setData(updated);
             setAction('addLeadNote');
             setSuccess('Действие записано в историю.');
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Ошибка сохранения.');
+            setError(
+              committed
+                ? CLIENT_WRITE_REFRESH_ERROR
+                : e instanceof Error
+                  ? e.message
+                  : 'Ошибка сохранения.',
+            );
           } finally {
             setBusy(false);
           }
         }}
       >
         <label className="field">
-          Действие
+          {copy('Действие')}{' '}
           <select name="action" value={action} onChange={(event) => setAction(event.target.value)}>
             {actions.map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {copy(label)}
               </option>
             ))}
           </select>
         </label>
         {action === 'assignLead' && (
           <label className="field">
-            Ответственный
+            {copy('Ответственный')}{' '}
             <select name="assignedToId" required defaultValue={lead.assignedToId}>
               {registry.operators.map((operator) => (
                 <option key={operator.id} value={operator.id}>
@@ -189,7 +240,7 @@ function LeadRecord({
         )}
         {action === 'recordConsent' && (
           <label className="field">
-            ID зарегистрированного заказчика
+            {copy('ID зарегистрированного заказчика')}{' '}
             <input name="clientId" required list={`clients-${id}`} autoComplete="off" />
             <datalist id={`clients-${id}`}>
               {registry.clients.map((client) => (
@@ -199,23 +250,25 @@ function LeadRecord({
               ))}
             </datalist>
             <small>
-              Укажите именно владельца будущего задания. Он сам подтвердит передачу и заполнит ТЗ.
+              {copy(
+                'Укажите именно владельца будущего задания. Он сам подтвердит передачу и заполнит ТЗ.',
+              )}
             </small>
           </label>
         )}
         {action === 'closeLead' && (
           <label className="field">
-            Итог
+            {copy('Итог')}{' '}
             <select name="decision">
-              <option value="declined">Отказ</option>
-              <option value="archived">Архив</option>
+              <option value="declined">{copy('Отказ')}</option>
+              <option value="archived">{copy('Архив')}</option>
             </select>
           </label>
         )}
         {action === 'editLead' && (
           <>
             <label className="field">
-              Название
+              {copy('Название')}{' '}
               <input
                 name="title"
                 required
@@ -225,7 +278,7 @@ function LeadRecord({
               />
             </label>
             <label className="field">
-              Суть запроса или обсуждения
+              {copy('Суть запроса или обсуждения')}{' '}
               <textarea
                 name="summary"
                 required
@@ -235,7 +288,7 @@ function LeadRecord({
               />
             </label>
             <label className="field">
-              Название источника
+              {copy('Название источника')}{' '}
               <input
                 name="sourceName"
                 required
@@ -245,7 +298,7 @@ function LeadRecord({
               />
             </label>
             <label className="field">
-              Актуален до
+              {copy('Актуален до')}{' '}
               <input
                 name="expiresAt"
                 type="datetime-local"
@@ -257,30 +310,35 @@ function LeadRecord({
         )}
         <label className="field">
           {action === 'recordConsent'
-            ? 'Основание согласия: кто, когда и на что согласился'
+            ? copy('Основание согласия: кто, когда и на что согласился')
             : action === 'recordContact'
-              ? 'Итог выполненного вручную контакта'
-              : 'Обоснование или заметка'}
+              ? copy('Итог выполненного вручную контакта')
+              : copy('Обоснование или заметка')}
           <textarea name="reason" required minLength={10} maxLength={2000} />
         </label>
         <button className="button" disabled={busy}>
-          Записать действие
+          {copy('Записать действие')}
         </button>
       </form>
       <details>
-        <summary>История ({data.total})</summary>
+        <summary>
+          {copy('История (')}
+          {data.total})
+        </summary>
         {data.events.map((event) => (
           <article className="summary-card" key={event.id}>
             <strong>
-              Версия {event.version} · {event.action}
+              {copy('Версия')} {event.version} · {adminCodeLabel(event.action, locale)}
             </strong>
-            <p>{event.note}</p>
             <p>
-              {date(event.createdAt, true)} · автор {event.actorId}
+              <span lang="und">{event.note}</span>
+            </p>
+            <p>
+              {date(event.createdAt, true, locale)} {copy('· автор')} {event.actorId}
             </p>
             {!!Object.keys(event.detailsJson).length && (
               <details>
-                <summary>Подробности изменения</summary>
+                <summary>{copy('Подробности изменения')}</summary>
                 {Object.entries(event.detailsJson).map(([key, value]) => (
                   <p key={key}>
                     <b>{key}</b>: {value}
@@ -296,15 +354,17 @@ function LeadRecord({
             disabled={page === 1 || busy}
             onClick={() => setPage(page - 1)}
           >
-            Новые события
+            {copy('Новые события')}
           </button>
-          <span>Страница {page}</span>
+          <span>
+            {copy('Страница')} {page}
+          </span>
           <button
             className="button secondary"
             disabled={page * 20 >= data.total || busy}
             onClick={() => setPage(page + 1)}
           >
-            Старые события
+            {copy('Старые события')}
           </button>
         </div>
       </details>
@@ -313,6 +373,7 @@ function LeadRecord({
 }
 
 export function LeadsPanel() {
+  const { locale, copy } = useMarketplaceCopy();
   const createForm = useRef<HTMLFormElement>(null);
   const [data, setData] = useState<LeadListData | null>(null),
     [page, setPage] = useState(1),
@@ -328,15 +389,17 @@ export function LeadsPanel() {
   const url = `/api/admin/leads?page=${page}${kind ? `&kind=${kind}` : ''}${status ? `&status=${status}` : ''}`;
   const refresh = useCallback(async () => {
     try {
-      setData(await request<LeadListData>(url));
+      setData(await request(leadListDataSchema, url));
       setError('');
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка чтения.');
+      return false;
     }
   }, [url]);
   useEffect(() => {
     let active = true;
-    void request<LeadListData>(url)
+    void request(leadListDataSchema, url)
       .then((result) => {
         if (active) {
           setData(result);
@@ -352,15 +415,20 @@ export function LeadsPanel() {
   }, [url]);
   if (!data) return <LoadState error={error} retry={refresh} />;
   return (
-    <section className="stack content-intake" aria-label="Приватные лиды и обсуждения">
+    <section
+      lang={locale}
+      className="stack content-intake"
+      aria-label={copy('Приватные лиды и обсуждения')}
+    >
       <div className="panel stack">
-        <h2>Приватные лиды и обсуждения</h2>
+        <h2>{copy('Приватные лиды и обсуждения')}</h2>
         <p>
-          Найденный запрос ещё не является заказом. Сначала проверка и ручной контакт, затем
-          согласие конкретного заказчика. Только он сможет создать обычный черновик.
+          {copy(
+            'Найденный запрос ещё не является заказом. Сначала проверка и ручной контакт, затем согласие конкретного заказчика. Только он сможет создать обычный черновик.',
+          )}
         </p>
         <button className="button secondary" onClick={() => void refresh()}>
-          Обновить реестр
+          {copy('Обновить реестр')}
         </button>
         <ActionFeedback error={error} success={success} />
       </div>
@@ -391,7 +459,7 @@ export function LeadsPanel() {
       <form
         ref={createForm}
         className="panel stack"
-        aria-label="Новый приватный материал"
+        aria-label={copy('Новый приватный материал')}
         onSubmit={async (event) => {
           event.preventDefault();
           if (busy) return;
@@ -400,8 +468,9 @@ export function LeadsPanel() {
           setBusy(true);
           setError('');
           setSuccess('');
+          let committed = false;
           try {
-            const saved = await request<{ leadId: string }>('/api/admin/leads', {
+            const saved = await request(leadMutationDataSchema, '/api/admin/leads', {
               action: 'createLead',
               kind: values.get('kind'),
               sourceUrl: values.get('sourceUrl'),
@@ -411,46 +480,52 @@ export function LeadsPanel() {
               assignedToId: values.get('assignedToId'),
               expiresAt: new Date(String(values.get('expiresAt'))).toISOString(),
             });
-            await refresh();
+            committed = true;
+            if (!(await refresh())) throw new Error(CLIENT_WRITE_REFRESH_ERROR);
             setSelected(saved.leadId);
             setSuccess('Кандидат учтён. Повтор ссылки не создаёт новую запись.');
             form.reset();
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Ошибка сохранения.');
+            setError(
+              committed
+                ? CLIENT_WRITE_REFRESH_ERROR
+                : e instanceof Error
+                  ? e.message
+                  : 'Ошибка сохранения.',
+            );
           } finally {
             setBusy(false);
           }
         }}
       >
-        <h3>Добавить вручную</h3>
+        <h3>{copy('Добавить вручную')}</h3>
         <label className="field">
-          Тип
+          {copy('Тип')}{' '}
           <select name="kind">
-            <option value="business_request">Запрос бизнеса</option>
-            <option value="discussion">Тематическое обсуждение</option>
+            <option value="business_request">{copy('Запрос бизнеса')}</option>
+            <option value="discussion">{copy('Тематическое обсуждение')}</option>
           </select>
         </label>
         <label className="field">
-          Ссылка на оригинал
+          {copy('Ссылка на оригинал')}{' '}
           <input name="sourceUrl" type="url" required maxLength={2000} />
         </label>
         <label className="field">
-          Название источника
+          {copy('Название источника')}{' '}
           <input name="sourceName" required minLength={3} maxLength={120} />
         </label>
         <label className="field">
-          Название
-          <input name="title" required minLength={8} maxLength={140} />
+          {copy('Название')} <input name="title" required minLength={8} maxLength={140} />
         </label>
         <label className="field">
-          Суть запроса или обсуждения
+          {copy('Суть запроса или обсуждения')}{' '}
           <textarea name="summary" required minLength={20} maxLength={2000} />
         </label>
         <label className="field">
-          Ответственный
+          {copy('Ответственный')}{' '}
           <select name="assignedToId" required defaultValue="">
             <option value="" disabled>
-              Выберите администратора
+              {copy('Выберите администратора')}
             </option>
             {data.operators.map((operator) => (
               <option key={operator.id} value={operator.id}>
@@ -460,21 +535,25 @@ export function LeadsPanel() {
           </select>
         </label>
         <label className="field">
-          Актуален до
+          {copy('Актуален до')}{' '}
           <input name="expiresAt" type="datetime-local" required defaultValue={defaultExpiry} />
           <small>
-            Срок внутренней проверки, максимум 90 дней. Это не обещание или дедлайн заказчика.
+            {copy(
+              'Срок внутренней проверки, максимум 90 дней. Это не обещание или дедлайн заказчика.',
+            )}
           </small>
         </label>
         <button className="button" disabled={busy}>
-          Добавить в приватный реестр
+          {copy('Добавить в приватный реестр')}
         </button>
         <button className="button secondary" type="reset" disabled={busy}>
-          Очистить форму
+          {copy('Очистить форму')}
         </button>
       </form>
       <div className="panel stack">
-        <h3>Записи: {data.total}</h3>
+        <h3>
+          {copy('Записи:')} {data.total}
+        </h3>
         {selected && !data.leads.some((lead) => lead.id === selected) && (
           <LeadRecord
             key={selected}
@@ -486,7 +565,7 @@ export function LeadsPanel() {
         )}
         <div className="form-grid">
           <label className="field">
-            Тип материала
+            {copy('Тип материала')}{' '}
             <select
               value={kind}
               onChange={(event) => {
@@ -494,13 +573,13 @@ export function LeadsPanel() {
                 setPage(1);
               }}
             >
-              <option value="">Все типы</option>
-              <option value="business_request">Запросы бизнеса</option>
-              <option value="discussion">Обсуждения</option>
+              <option value="">{copy('Все типы')}</option>
+              <option value="business_request">{copy('Запросы бизнеса')}</option>
+              <option value="discussion">{copy('Обсуждения')}</option>
             </select>
           </label>
           <label className="field">
-            Стадия
+            {copy('Стадия')}{' '}
             <select
               value={status}
               onChange={(event) => {
@@ -508,7 +587,7 @@ export function LeadsPanel() {
                 setPage(1);
               }}
             >
-              <option value="">Все стадии</option>
+              <option value="">{copy('Все стадии')}</option>
               {Object.entries(labels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -520,19 +599,21 @@ export function LeadsPanel() {
         {data.leads.map((lead) => (
           <Fragment key={lead.id}>
             <article className="summary-card stack">
-              <strong>{lead.title}</strong>
+              <strong>
+                <span lang="und">{lead.title}</span>
+              </strong>
               <p>
-                {labels[lead.status]} ·{' '}
-                {lead.kind === 'discussion' ? 'Обсуждение' : 'Бизнес-запрос'}
+                {copy(labels[lead.status])} ·{' '}
+                {lead.kind === 'discussion' ? copy('Обсуждение') : copy('Бизнес-запрос')}
               </p>
               <p>
-                Ответственный:{' '}
+                {copy('Ответственный:')}{' '}
                 {data.operators.find((operator) => operator.id === lead.assignedToId)?.name ??
-                  lead.assignedToId}
-                . До {date(lead.expiresAt, true)}.
+                  lead.assignedToId}{' '}
+                {copy('. До')} {date(lead.expiresAt, true, locale)}.
               </p>
               <button className="button secondary" onClick={() => setSelected(lead.id)}>
-                Открыть карточку лида
+                {copy('Открыть карточку лида')}
               </button>
             </article>
             {selected === lead.id && (
@@ -552,15 +633,17 @@ export function LeadsPanel() {
             disabled={page === 1 || busy}
             onClick={() => setPage(page - 1)}
           >
-            Назад
+            {copy('Назад')}
           </button>
-          <span>Страница {page}</span>
+          <span>
+            {copy('Страница')} {page}
+          </span>
           <button
             className="button secondary"
             disabled={page * 20 >= data.total || busy}
             onClick={() => setPage(page + 1)}
           >
-            Далее
+            {copy('Далее')}
           </button>
         </div>
       </div>
