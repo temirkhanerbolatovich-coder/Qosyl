@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/session';
 import { ProfileForm } from '@/app/student/profile/profile-form';
+import { ProfileHeading } from '@/components/profile-heading';
 
 export default async function OnboardingPage({
   searchParams,
@@ -10,11 +11,7 @@ export default async function OnboardingPage({
   const { role } = await searchParams;
   return (
     <div className="container page-shell">
-      <span className="eyebrow">ДОБРО ПОЖАЛОВАТЬ</span>
-      <h1>Начнём с вашего профиля</h1>
-      <p className="muted">
-        Для первого отклика не требуется опыт работы. Достаточно навыков и времени на задачу.
-      </p>
+      <ProfileHeading onboarding />
       <ProfileForm
         onboarding
         preferredRole={role}

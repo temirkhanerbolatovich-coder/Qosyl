@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLifecycleSettings } from '../src/lib/lifecycle-settings.mjs';
+import { getOpportunityNotificationSettings } from '../src/lib/opportunity-notification-settings.mjs';
 
 // Force-termination on Windows cannot run the parent's cleanup handlers. Owned
 // children preload this module and stop if their supervisor disappears.
@@ -82,6 +83,7 @@ export function superviseProcesses(
 async function main() {
   await import('dotenv/config');
   const settings = getLifecycleSettings(process.env);
+  const opportunityNotifications = getOpportunityNotificationSettings(process.env);
   const check = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-env.ts'], {
     env: process.env,
     stdio: 'inherit',
@@ -103,6 +105,17 @@ async function main() {
       args: ['--conditions=react-server', '--import', 'tsx', 'scripts/project-lifecycle-worker.ts'],
     });
   } else console.log('project_lifecycle_disabled');
+  if (opportunityNotifications.enabled) {
+    commands.push({
+      name: 'opportunity-notifications',
+      args: [
+        '--conditions=react-server',
+        '--import',
+        'tsx',
+        'scripts/opportunity-search-worker.ts',
+      ],
+    });
+  } else console.log('opportunity_notifications_disabled');
   return superviseProcesses(commands);
 }
 

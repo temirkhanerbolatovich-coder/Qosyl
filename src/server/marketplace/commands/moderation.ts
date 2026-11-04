@@ -5,6 +5,8 @@ import { mutationSchemas } from '@/lib/validation';
 import type { Tx } from '../shared';
 import { assert, isParticipant, requireRole, requireState } from '@/lib/permissions';
 import { event, notify, moderation, loadProject, rate } from '../shared';
+import { getNotificationLanguage } from '@/server/notification-language';
+import { notificationText } from '@/lib/notification-language';
 
 export async function moderationCommands(
   tx: Tx,
@@ -44,7 +46,10 @@ export async function moderationCommands(
       await tx.notification.create({
         data: {
           userId: project.clientId,
-          text: approve ? 'Заказ одобрен и опубликован.' : `Заказ возвращен: ${reason}`,
+          text: notificationText(
+            await getNotificationLanguage(tx, project.clientId),
+            approve ? 'Заказ одобрен и опубликован.' : `Заказ возвращен: ${reason}`,
+          ),
           url: '/client/projects',
         },
       });

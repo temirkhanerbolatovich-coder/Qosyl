@@ -1,0 +1,1 @@
+ALTER TABLE "StudentProfile" ADD COLUMN "hiddenFields" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

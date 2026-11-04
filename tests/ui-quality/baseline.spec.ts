@@ -99,7 +99,10 @@ test('student dashboard: real seeded role and mobile navigation', async ({ page 
     await expect(menu).toBeVisible();
     await menu.click();
     await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
-    await page.getByRole('link', { name: 'Мой кабинет', exact: true }).click();
+    await page
+      .getByRole('navigation', { name: 'Основная навигация' })
+      .getByRole('link', { name: 'Мой кабинет', exact: true })
+      .click();
   }
   await inspect(page, testInfo, 'student-dashboard');
 });

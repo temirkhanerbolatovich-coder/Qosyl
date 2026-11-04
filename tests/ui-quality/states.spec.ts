@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 
 async function checkState(page: Page, info: TestInfo, name: string) {
+  // A filter navigation can render its body before Next restores document metadata.
+  await expect(page).toHaveTitle(/\S/);
   const axe = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
@@ -109,27 +111,14 @@ test('catalogue: mobile disclosure preserves input, applies URL filters and rese
   await expect(page).toHaveURL(/\/projects$/);
 });
 
-test('navigation: keyboard opens menu and Escape restores focus', async ({ page }) => {
+test('navigation: links are visible once and usable by keyboard', async ({ page }) => {
   await page.goto('/');
-  const toggle = page.locator('button.mobile-menu');
-  if (await toggle.isVisible()) {
-    await toggle.focus();
-    await page.keyboard.press('Enter');
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Tab');
-    await expect(
-      page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link').first(),
-    ).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(toggle).toBeFocused();
-  } else {
-    await page
-      .getByRole('navigation', { name: 'Основная навигация' })
-      .getByRole('link')
-      .first()
-      .focus();
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/projects$/);
-  }
+  const nav = page.getByRole('navigation', { name: 'Основная навигация' });
+  const projects = nav.getByRole('link', { name: 'Проекты', exact: true });
+  await expect(projects).toBeVisible();
+  await expect(page.locator('header a[href="/projects"]')).toHaveCount(1);
+  await projects.focus();
+  await expect(projects).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/projects$/);
 });

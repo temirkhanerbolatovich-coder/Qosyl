@@ -91,20 +91,34 @@ export const eventLabels: Record<string, string> = {
   complaint_filed: 'Отправлена жалоба',
   project_paused: 'Публикация приостановлена',
 };
-export function money(value: number) {
-  return new Intl.NumberFormat('ru-KZ', { maximumFractionDigits: 0 }).format(value) + ' ₸';
+export function money(value: number, locale: 'ru' | 'kk' = 'ru') {
+  return (
+    new Intl.NumberFormat(locale === 'kk' ? 'kk-KZ' : 'ru-KZ', { maximumFractionDigits: 0 }).format(
+      value,
+    ) + ' ₸'
+  );
 }
-export function date(value: string | Date | null | undefined, withTime = false) {
+export function date(
+  value: string | Date | null | undefined,
+  withTime = false,
+  locale: 'ru' | 'kk' = 'ru',
+) {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru-KZ', {
-    day: 'numeric',
-    month: 'short',
+  const formatter = new Intl.DateTimeFormat(locale === 'kk' ? 'kk-KZ' : 'ru-KZ', {
+    day: locale === 'kk' ? '2-digit' : 'numeric',
+    // Some browser ICU builds display abbreviated Kazakh months as "M11".
+    month: locale === 'kk' ? '2-digit' : 'short',
     year: 'numeric',
     timeZone: 'Asia/Almaty',
     ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-  }).format(parsed);
+  });
+  if (locale === 'ru') return formatter.format(parsed);
+  // Keep DD.MM.YYYY consistent across browser and server ICU locale patterns.
+  const parts: Record<string, string> = {};
+  for (const part of formatter.formatToParts(parsed)) parts[part.type] = part.value;
+  return `${parts.day}.${parts.month}.${parts.year}${withTime ? ` ${parts.hour}:${parts.minute}` : ''}`;
 }
 export function lines(value: FormDataEntryValue | null) {
   return String(value ?? '')

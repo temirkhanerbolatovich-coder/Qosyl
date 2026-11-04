@@ -39,6 +39,12 @@ export async function updateProfile(user: Pick<User, 'id'>, data: ProfileUpdateI
       if (data.role === 'student') {
         const values = {
           bio: data.bio,
+          headline: data.headline,
+          studyYear: data.studyYear,
+          languages: data.languages ? [...new Set(data.languages)] : undefined,
+          experiences: data.experiences,
+          profileLinks: data.profileLinks,
+          hiddenFields: data.hiddenFields ? [...new Set(data.hiddenFields)] : undefined,
           city: data.city,
           institution: data.institution,
           discipline: data.discipline,
@@ -53,11 +59,30 @@ export async function updateProfile(user: Pick<User, 'id'>, data: ProfileUpdateI
           update: values,
         });
         if (data.externalWorks) {
-          await tx.externalPortfolioItem.deleteMany({ where: { userId: user.id } });
-          if (data.externalWorks.length) {
-            await tx.externalPortfolioItem.createMany({
-              data: data.externalWorks.map((work) => ({ userId: user.id, ...work })),
-            });
+          // Legacy bulk writes must never delete/recreate cases or overwrite their consent.
+          const current = await tx.externalPortfolioItem.findMany({ where: { userId: user.id } });
+          const legacyKey = (item: { title: string; description: string; url: string }) =>
+            JSON.stringify([item.title, item.description, item.url]);
+          const unchanged =
+            JSON.stringify(data.externalWorks.map(legacyKey).sort()) ===
+            JSON.stringify(current.map(legacyKey).sort());
+          if (!unchanged) {
+            if (!current.length) {
+              // Compatibility for an initial legacy profile import; never replace existing rows.
+              await tx.externalPortfolioItem.createMany({
+                data: data.externalWorks.map((work, position) => ({
+                  userId: user.id,
+                  ...work,
+                  position,
+                  visibility: 'draft',
+                  publicationAllowed: false,
+                })),
+              });
+            } else
+              throw new AppError(
+                409,
+                'Редактируйте работы в разделе портфолио. Профиль и кейсы не изменены.',
+              );
           }
         }
       } else {

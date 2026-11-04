@@ -1,9 +1,24 @@
+import { publicCaseWhere, caseOrder } from '@/lib/portfolio-case';
+import { PortfolioCaseCard } from '@/components/portfolio-cases';
+import {
+  MarketplaceText,
+  MarketplaceSurface,
+  MarketplaceDate,
+  MarketplaceWeeklyHours,
+} from '@/components/marketplace-copy';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BadgeCheck, Clock3, ExternalLink, MapPin, Star } from 'lucide-react';
 import { db } from '@/lib/db';
 import { config } from '@/lib/config';
 import { safePortfolioUrl } from '@/app/api/profile/schema';
+import { publicExperiences } from '@/lib/profile-details';
+import { ProfileExperience } from '@/components/profile-experience';
+import { PublicProfileLinks } from '@/components/profile-links';
+import { publicProfileLinks } from '@/lib/profile-links';
+import { visibleStudentProfile } from '@/lib/profile-visibility';
+import { ProfileAvatarImage } from '@/components/profile-avatar';
+import { avatarUrl } from '@/lib/avatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +32,10 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
       status: true,
       demo: true,
       studentProfile: true,
+      avatar: { select: { revision: true, isPublic: true } },
       externalWorks: {
-        select: { id: true, title: true, description: true, url: true },
-        orderBy: { createdAt: 'desc' },
+        where: publicCaseWhere,
+        orderBy: caseOrder,
       },
     },
   });
@@ -30,7 +46,7 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
     (person.demo && !config.demoEnabled)
   )
     notFound();
-  const profile = person.studentProfile;
+  const profile = visibleStudentProfile(person.studentProfile);
   const confirmed = await db.portfolioRecord.findMany({
     where: {
       studentId: id,
@@ -39,6 +55,8 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
       studentConsentAt: { not: null },
       project: {
         status: { in: ['accepted', 'completed'] },
+        assignedStudentId: id,
+        events: { some: { action: 'acceptSubmission' } },
         ...(config.demoEnabled ? {} : { demo: false }),
       },
     },
@@ -65,79 +83,122 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
     : [];
 
   return (
-    <div className="container page-shell public-profile">
+    <MarketplaceSurface className="container page-shell public-profile">
       <Link href="/projects" className="muted">
-        ← К каталогу заказов
+        <MarketplaceText text={'← К каталогу заказов'} />
       </Link>
       <section className="panel">
-        <span className="eyebrow">ПРОФИЛЬ ИСПОЛНИТЕЛЯ</span>
-        <h1>{person.name}</h1>
-        {person.demo && <p className="badge">ДЕМО · Вымышленный профиль</p>}
+        <span className="eyebrow">
+          <MarketplaceText text={'ПРОФИЛЬ ИСПОЛНИТЕЛЯ'} />
+        </span>
+        <h1>
+          <ProfileAvatarImage
+            name={person.name}
+            url={person.avatar?.isPublic ? avatarUrl(person.id, person.avatar.revision) : undefined}
+          />
+          <span lang="und">{person.name}</span>
+        </h1>
+        {profile.headline && <p lang="und">{profile.headline}</p>}
+        {person.demo && (
+          <p className="badge">
+            <MarketplaceText text={'ДЕМО · Вымышленный профиль'} />
+          </p>
+        )}
         <div className="inline-actions muted">
+          {profile.city && (
+            <span>
+              <MapPin size={16} aria-hidden="true" /> <span lang="und">{profile.city}</span>
+            </span>
+          )}
           <span>
-            <MapPin size={16} aria-hidden="true" /> {profile.city}
-          </span>
-          <span>
-            <Clock3 size={16} aria-hidden="true" /> До {profile.weeklyHours} ч в неделю
+            <Clock3 size={16} aria-hidden="true" />{' '}
+            <MarketplaceWeeklyHours hours={profile.weeklyHours} />
           </span>
         </div>
         {profile.discipline && (
           <p>
-            {profile.discipline}
-            {profile.institution ? ` · ${profile.institution}` : ''}
+            <span lang="und">{profile.discipline}</span>
+            {profile.institution ? <span lang="und">{` · ${profile.institution}`}</span> : ''}
           </p>
         )}
         <p style={{ whiteSpace: 'pre-wrap' }}>
-          {profile.bio || 'Исполнитель пока не добавил описание.'}
+          {profile.bio ? (
+            <span lang="und">{profile.bio}</span>
+          ) : (
+            <MarketplaceText text={'Исполнитель пока не добавил описание.'} />
+          )}
         </p>
         <div className="inline-actions">
           {profile.skills.map((skill) => (
             <span className="badge" key={skill}>
-              {skill}
+              <span lang="und">{skill}</span>
             </span>
           ))}
         </div>
       </section>
+      <ProfileExperience
+        items={publicExperiences(profile.experiences, profile.isPublic)}
+        studyYear={profile.studyYear}
+        languages={profile.languages}
+      />
       <section aria-labelledby="confirmed-work-heading">
+        <PublicProfileLinks links={publicProfileLinks(profile.profileLinks, profile.isPublic)} />
         <h2 id="confirmed-work-heading" className="section-title">
-          Опыт, подтверждённый заказчиком
+          <MarketplaceText text={'Опыт, подтверждённый заказчиком'} />
         </h2>
         <p className="muted">
-          Результат принят на платформе. Публичные сведения согласованы обеими сторонами. Это не
-          подтверждение фактической оплаты.
+          <MarketplaceText
+            text={
+              'Результат принят на платформе. Публичные сведения согласованы обеими сторонами. Это не подтверждение фактической оплаты.'
+            }
+          />
         </p>
         {!confirmed.length && (
           <div className="panel">
-            <p>Подтверждённых публичных проектов пока нет.</p>
-            <p className="muted">Отсутствие опыта не мешает откликаться на первые заказы.</p>
+            <p>
+              <MarketplaceText text={'Подтверждённых публичных проектов пока нет.'} />
+            </p>
+            <p className="muted">
+              <MarketplaceText text={'Отсутствие опыта не мешает откликаться на первые заказы.'} />
+            </p>
           </div>
         )}
         {confirmed.map((record) => (
           <article key={record.id} className="panel">
             <span className="badge">
-              <BadgeCheck size={15} aria-hidden="true" /> Подтверждено заказчиком · client-confirmed
+              <BadgeCheck size={15} aria-hidden="true" />{' '}
+              <MarketplaceText text={'Выполнено на Qosyl · platform_verified'} />
             </span>
-            {record.project.demo && <span className="badge">ДЕМО</span>}
-            {record.visibility === 'redacted_public' && (
-              <span className="badge">Обезличенный результат</span>
+            {record.project.demo && (
+              <span className="badge">
+                <MarketplaceText text={'ДЕМО'} />
+              </span>
             )}
-            <h3>{record.title}</h3>
-            {record.role && <p>{record.role}</p>}
-            <p style={{ whiteSpace: 'pre-wrap' }}>{record.summary}</p>
+            {record.visibility === 'redacted_public' && (
+              <span className="badge">
+                <MarketplaceText text={'Обезличенный результат'} />
+              </span>
+            )}
+            <h3>
+              <span lang="und">{record.title}</span>
+            </h3>
+            {record.role && (
+              <p>
+                <span lang="und">{record.role}</span>
+              </p>
+            )}
+            <p style={{ whiteSpace: 'pre-wrap' }}>
+              <span lang="und">{record.summary}</span>
+            </p>
             <div className="inline-actions">
               {record.skills.map((skill) => (
                 <span className="badge" key={skill}>
-                  {skill}
+                  <span lang="und">{skill}</span>
                 </span>
               ))}
             </div>
             <p className="muted">
-              {new Intl.DateTimeFormat('ru-KZ', {
-                timeZone: config.timeZone,
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }).format(record.createdAt)}
+              <MarketplaceDate value={record.createdAt.toISOString()} timeZone={config.timeZone} />
             </p>
             {record.visibility !== 'redacted_public' &&
               record.publicLinks
@@ -145,7 +206,8 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
                 .map((url, index) => (
                   <p key={url}>
                     <a href={url} target="_blank" rel="noopener noreferrer nofollow">
-                      Публичный материал {index + 1} <ExternalLink size={14} aria-hidden="true" />
+                      <MarketplaceText text={'Публичный материал'} /> {index + 1}{' '}
+                      <ExternalLink size={14} aria-hidden="true" />
                     </a>
                   </p>
                 ))}
@@ -154,10 +216,12 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
               .map((review) => (
                 <blockquote key={review.id}>
                   <p>
-                    <Star size={15} aria-hidden="true" /> {review.rating}/5 · Отзыв заказчика после
-                    приёмки
+                    <Star size={15} aria-hidden="true" /> {review.rating}
+                    <MarketplaceText text={'/5 · Отзыв заказчика после приёмки'} />
                   </p>
-                  <p>{review.body}</p>
+                  <p>
+                    <span lang="und">{review.body}</span>
+                  </p>
                 </blockquote>
               ))}
           </article>
@@ -165,25 +229,20 @@ export default async function TalentPage({ params }: { params: Promise<{ id: str
       </section>
       <section aria-labelledby="external-work-heading">
         <h2 id="external-work-heading" className="section-title">
-          Учебные и личные работы
+          <MarketplaceText text={'Учебные и личные работы'} />
         </h2>
-        <p className="muted">Добавлены автором (self-reported), без проверки заказчиком.</p>
+        <p className="muted">
+          <MarketplaceText text={'Добавлены автором (self-reported), без проверки заказчиком.'} />
+        </p>
         {!person.externalWorks.length && (
-          <div className="panel">Внешние работы пока не добавлены.</div>
+          <div className="panel">
+            <MarketplaceText text={'Внешние работы пока не добавлены.'} />
+          </div>
         )}
         {person.externalWorks.map((work) => (
-          <article className="panel" key={work.id}>
-            <span className="badge">Добавлено автором</span>
-            <h3>{work.title}</h3>
-            <p>{work.description}</p>
-            {safePortfolioUrl.safeParse(work.url).success && (
-              <a href={work.url} target="_blank" rel="noopener noreferrer nofollow">
-                Посмотреть работу <ExternalLink size={14} aria-hidden="true" />
-              </a>
-            )}
-          </article>
+          <PortfolioCaseCard key={work.id} item={work} />
         ))}
       </section>
-    </div>
+    </MarketplaceSurface>
   );
 }

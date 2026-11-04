@@ -1,14 +1,9 @@
 import { z } from 'zod';
+import { hiddenProfileFieldsSchema } from '@/lib/profile-visibility';
+import { experiencesSchema } from '@/lib/profile-details';
 
-export const safePortfolioUrl = z
-  .string()
-  .trim()
-  .max(2_000)
-  .url()
-  .refine((value) => {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password;
-  }, 'Используйте HTTPS-ссылку без логина и пароля.');
+import { safePortfolioUrl, profileLinksSchema } from '@/lib/profile-links';
+export { safePortfolioUrl } from '@/lib/profile-links';
 
 export const profileInput = z
   .object({
@@ -16,6 +11,12 @@ export const profileInput = z
     name: z.string().trim().min(2).max(100),
     city: z.string().trim().min(2).max(100),
     bio: z.string().trim().max(1_500).optional(),
+    headline: z.string().trim().max(120).optional(),
+    studyYear: z.number().int().min(1).max(8).nullable().optional(),
+    languages: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+    experiences: experiencesSchema.optional(),
+    profileLinks: profileLinksSchema.optional(),
+    hiddenFields: hiddenProfileFieldsSchema.optional(),
     institution: z.string().trim().max(150).optional(),
     discipline: z.string().trim().max(100).optional(),
     weeklyHours: z.number().int().min(1).max(40).optional(),

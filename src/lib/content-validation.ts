@@ -134,3 +134,9 @@ export const publicContentQueryInput = z.object({
 export type OpportunityQuery = z.infer<typeof publicContentQueryInput>;
 export type SourceInput = z.infer<typeof sourceInput>;
 export type ManualContentInput = z.infer<typeof manualContentInput>;
+
+export const contentInspectionInput = z.object({
+  itemId: id,
+  expectedRevisionId: id,
+  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+});

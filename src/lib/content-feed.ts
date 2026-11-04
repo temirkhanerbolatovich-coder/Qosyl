@@ -176,7 +176,7 @@ function knownDate(value: string | Date | null | undefined): Date | null {
 
 function classify(text: string): ContentCategory {
   if (
-    /принял[аи]? участие|состоял(?:ся|ась|ось|ись)|прош(?:[её]л|л[аои])|итоги|поздравля|обладатели.{0,45}грант|завоевали/i.test(
+    /принял[аи]? участие|состоял(?:ся|ась|ось|ись)|прош(?:[её]л|л[аои])|итоги|наградили|победители|қорытынды|марапаттал|өтті|поздравля|обладатели.{0,45}грант|завоевали/i.test(
       text,
     )
   )
@@ -184,7 +184,8 @@ function classify(text: string): ContentCategory {
   if (/hackathon|хакатон/i.test(text)) return 'hackathon';
   if (/scholarship|стипенди|шәкіртақы/i.test(text)) return 'scholarship';
   if (/grant|грант/i.test(text)) return 'grant';
-  if (/competition|contest|конкурс|соревнован|байқау/i.test(text)) return 'competition';
+  if (/competition|contest|конкурс|соревнован|олимпиад|olympiad|байқау/i.test(text))
+    return 'competition';
   if (
     /internship|стажиров|производственн[а-яё ]{0,15}практик|профессиональн[а-яё ]{0,15}практик|тағылымдама/i.test(
       text,

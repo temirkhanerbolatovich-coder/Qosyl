@@ -12,50 +12,8 @@ import { normalizeContentItem, type ContentCategory } from '../src/lib/content-f
 import { localDemoSettings } from './local-demo-config.mjs';
 import { specialtyLabels } from '../src/lib/opportunity-search';
 
-const sources = [
-  {
-    name: 'Astana Hub и региональные хабы — мероприятия',
-    type: 'html',
-    feedUrl: 'https://astanahub.com/ru/event/',
-    allowedHost: 'astanahub.com',
-  },
-  {
-    name: 'Фонд науки — официальный RSS',
-    type: 'rss',
-    feedUrl: 'https://science-fund.kz/feed/',
-    allowedHost: 'science-fund.kz',
-  },
-  {
-    name: 'Болашак — государственные программы и стажировки',
-    type: 'html',
-    feedUrl: 'https://bolashak.gov.kz/ru/',
-    allowedHost: 'bolashak.gov.kz',
-  },
-  {
-    name: 'Медицинский университет — новости и возможности',
-    type: 'html',
-    feedUrl: 'https://amu.edu.kz/ru/infocenter/news/',
-    allowedHost: 'amu.edu.kz',
-  },
-  {
-    name: 'KazNARU — объявления аграрного исследовательского университета',
-    type: 'html',
-    feedUrl: 'https://www.kaznaru.edu.kz/ru/anons',
-    allowedHost: 'www.kaznaru.edu.kz',
-  },
-  {
-    name: 'Abai University — педагогика и студенческие объявления',
-    type: 'html',
-    feedUrl: 'https://abai.university/ru/news',
-    allowedHost: 'abai.university',
-  },
-  {
-    name: 'Международный университет туризма и гостеприимства',
-    type: 'html',
-    feedUrl: 'https://iuth.edu.kz/ru/',
-    allowedHost: 'iuth.edu.kz',
-  },
-];
+import { opportunitySources as sources } from './opportunity-sources';
+
 async function main() {
   localDemoSettings(process.env);
   if (!process.argv.includes('--collect'))

@@ -1,9 +1,11 @@
 'use client';
+import { MarketplaceMessage, useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { LeadHandoff } from '@/contracts/leads';
 import { date } from '@/lib/labels';
 export function LeadHandoffsPanel() {
+  const { locale, copy } = useMarketplaceCopy();
   const [leads, setLeads] = useState<LeadHandoff[]>([]),
     [error, setError] = useState(''),
     [page, setPage] = useState(1),
@@ -41,25 +43,30 @@ export function LeadHandoffsPanel() {
   }, [page, refreshNumber]);
   if (!leads.length && !error && page === 1) return null;
   return (
-    <section className="panel stack" aria-label="Переданные бизнес-запросы">
-      <h2>Переданные бизнес-запросы</h2>
+    <section className="panel stack" lang={locale} aria-label={copy('Переданные бизнес-запросы')}>
+      <h2>{copy('Переданные бизнес-запросы')}</h2>
       <button className="button secondary" onClick={() => setRefreshNumber((value) => value + 1)}>
-        Обновить передачи
+        {copy('Обновить передачи')}
       </button>
       <p>
-        Создавайте заказ только если это ваша задача и вы согласовали её размещение. Бюджет,
-        результат и критерии вы указываете самостоятельно; публикация проходит модерацию.
+        {copy(
+          'Создавайте заказ только если это ваша задача и вы согласовали её размещение. Бюджет, результат и критерии вы указываете самостоятельно; публикация проходит модерацию.',
+        )}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          <MarketplaceMessage text={error} />
+        </p>
+      )}
       {leads.map((lead) => (
         <article className="panel stack" key={lead.id}>
-          <h3>{lead.title}</h3>
-          <p>{lead.summary}</p>
+          <h3 lang="und">{lead.title}</h3>
+          <p lang="und">{lead.summary}</p>
           <p className="muted small-text">
-            {lead.sourceName} · срок передачи до {date(lead.expiresAt, true)}
+            {lead.sourceName} {copy('· срок передачи до')} {date(lead.expiresAt, true, locale)}
           </p>
           <a href={lead.sourceUrl} target="_blank" rel="noopener noreferrer">
-            Исходный материал
+            {copy('Исходный материал')}
           </a>
           <Link
             className="button secondary"
@@ -69,7 +76,9 @@ export function LeadHandoffsPanel() {
                 : `/client/projects/new?leadId=${lead.id}`
             }
           >
-            {lead.projectId ? 'Открыть созданный заказ' : 'Проверить и создать черновик'}
+            {lead.projectId
+              ? copy('Открыть созданный заказ')
+              : copy('Проверить и создать черновик')}
           </Link>
         </article>
       ))}
@@ -79,15 +88,17 @@ export function LeadHandoffsPanel() {
           disabled={page === 1}
           onClick={() => setPage(page - 1)}
         >
-          Предыдущие передачи
+          {copy('Предыдущие передачи')}
         </button>
-        <span>Страница {page}</span>
+        <span>
+          {copy('Страница')} {page}
+        </span>
         <button
           className="button secondary"
           disabled={page * 20 >= total}
           onClick={() => setPage(page + 1)}
         >
-          Следующие передачи
+          {copy('Следующие передачи')}
         </button>
       </div>
     </section>

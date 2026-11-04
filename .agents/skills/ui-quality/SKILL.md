@@ -25,6 +25,8 @@ Inspect the affected components and existing tests before editing. Reuse a reaso
 
 Use real or explicitly marked demo content. Show the next useful action and honest data provenance. Avoid invented metrics, decorative badges, repeated oversized cards and animation without a task-specific reason. A functional sequence may use numbered steps; a color or radius is not inherently an AI defect. Reassess product priorities when the user changes scope; the report's marketplace example does not override the user's expansion of opportunity discovery.
 
+For each affected screen, review visual hierarchy, readable typography, consistent spacing, touch targets and visible focus alongside its loading, error, empty and success states. Evaluate patterns suggested by UI UX Pro Max as hypotheses against the actual task, existing Qosyl tokens and observed screenshots; do not replace the design system or generate a new palette automatically. Record adopted choices and evidence in the UI knowledge base when they have lasting value.
+
 ## Verify observable behavior
 
 Use the existing isolated Playwright server. `npm run test:ui:baseline` records screenshots/axe/layout observations without treating existing accessibility issues as passing quality. `npm run test:ui` enforces no serious/critical axe findings and no page overflow in covered states. Baseline success proves the harness ran, not WCAG conformance or design quality.

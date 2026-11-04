@@ -1,4 +1,5 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import { date } from '@/lib/labels';
 import { LoadState, useData } from './platform';
 
@@ -8,40 +9,50 @@ const statuses = {
   failed: 'Ошибка',
 };
 export function BackgroundJobsPanel() {
+  const { locale, copy } = useMarketplaceCopy();
   const { data, error, loading, refresh } = useData('backgroundJobs');
   if (!data || error || loading) return <LoadState error={error} retry={refresh} />;
   return (
-    <section className="panel stack" aria-label="Фоновая актуальность заданий">
-      <h2>Фоновая актуальность заданий</h2>
+    <section
+      lang={locale}
+      className="panel stack"
+      aria-label={copy('Фоновая актуальность заданий')}
+    >
+      <h2>{copy('Фоновая актуальность заданий')}</h2>
       <p>
         {data.settings.enabled
-          ? 'Запуск worker разрешён конфигурацией.'
-          : 'Worker выключен конфигурацией.'}{' '}
-        Интервал: {data.settings.intervalMs / 1000} сек.; до {data.settings.batchSize} заданий за
-        проход.
+          ? copy('Запуск worker разрешён конфигурацией.')
+          : copy('Worker выключен конфигурацией.')}{' '}
+        {copy('Интервал:')} {data.settings.intervalMs / 1000} {copy('сек.; до')}{' '}
+        {data.settings.batchSize} {copy('заданий за проход.')}
       </p>
       <p className="muted small-text">
-        История показывает завершённые проходы. Включённая настройка сама по себе не подтверждает,
-        что процесс сейчас работает. На выключенном компьютере обработка не выполняется. Просмотр
-        этого раздела не запускает задания.
+        {copy(
+          'История показывает завершённые проходы. Включённая настройка сама по себе не подтверждает, что процесс сейчас работает. На выключенном компьютере обработка не выполняется. Просмотр этого раздела не запускает задания.',
+        )}
       </p>
       <button className="button secondary" onClick={() => void refresh()}>
-        Обновить историю
+        {copy('Обновить историю')}
       </button>
       {!data.runs.length ? (
-        <p>Запусков пока нет.</p>
+        <p>{copy('Запусков пока нет.')}</p>
       ) : (
         data.runs.map((run) => (
           <article className="summary-card" key={run.id}>
-            <strong>{statuses[run.status]}</strong>
+            <strong>{copy(statuses[run.status])}</strong>
             <p>
-              {date(run.startedAt, true)} — {date(run.finishedAt, true)}
+              {date(run.startedAt, true, locale)} — {date(run.finishedAt, true, locale)}
             </p>
             <p>
-              Рассмотрено: {run.scannedProjects}; срок истёк: {run.expiredProjects}; уведомлений:{' '}
-              {run.remindersCreated}.
+              {copy('Рассмотрено:')} {run.scannedProjects}
+              {copy('; срок истёк:')} {run.expiredProjects}
+              {copy('; уведомлений:')} {run.remindersCreated}.
             </p>
-            {run.errorCode && <p className="muted">Код ошибки: {run.errorCode}</p>}
+            {run.errorCode && (
+              <p className="muted">
+                {copy('Код ошибки:')} {run.errorCode}
+              </p>
+            )}
           </article>
         ))
       )}

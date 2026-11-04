@@ -1,4 +1,6 @@
+import { publicCaseWhere, caseOrder } from '@/lib/portfolio-case';
 import 'server-only';
+import { visibleStudentProfile } from '@/lib/profile-visibility';
 import { Prisma, type User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { assert } from '@/lib/permissions';
@@ -127,12 +129,29 @@ export async function accountQueries(params: URLSearchParams, user: User) {
       where: { projectId: project.id },
       include: {
         student: {
-          select: { id: true, name: true, demo: true, studentProfile: true, externalWorks: true },
+          select: {
+            id: true,
+            name: true,
+            demo: true,
+            studentProfile: true,
+            externalWorks: { where: publicCaseWhere, orderBy: caseOrder },
+          },
         },
       },
       orderBy: { createdAt: 'asc' },
     });
-    return { project, applications };
+    return {
+      project,
+      applications: applications.map((application) => ({
+        ...application,
+        student: {
+          ...application.student,
+          studentProfile: application.student.studentProfile
+            ? visibleStudentProfile(application.student.studentProfile)
+            : null,
+        },
+      })),
+    };
   }
   throw new Error('Unsupported query dispatch');
 }

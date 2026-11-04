@@ -1,3 +1,4 @@
+import { inspectContentPage } from './inspection';
 import { searchContentQueue } from './search';
 import type { OpportunityQuery } from '@/lib/content-validation';
 import 'server-only';
@@ -310,6 +311,7 @@ async function applyEditorialAction(
 
 /** Every mutation rechecks current admin state; GET never synchronizes a remote source. */
 export async function mutateContentIntake(raw: Record<string, unknown>, sessionUser: User) {
+  if (raw.action === 'inspectContentPage') return inspectContentPage(db, sessionUser, raw);
   requireRole(sessionUser.roles, 'admin');
   return db.$transaction(
     async (tx) => {

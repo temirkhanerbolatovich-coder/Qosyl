@@ -12,7 +12,7 @@ $rootFiles = @(
     '.env.example', '.gitignore', '.gitattributes', '.prettierrc.json', '.prettierignore',
     'docker-compose.yml', 'START_DEMO.cmd'
 )
-$sourceRoots = @('src', 'prisma', 'scripts', 'deploy/oracle', 'tests', 'docs')
+$sourceRoots = @('src', 'prisma', 'public', 'scripts', 'deploy/oracle', 'tests', 'docs')
 $sourceFiles = @($rootFiles | ForEach-Object { Get-Item -LiteralPath (Join-Path $projectRoot $_) })
 foreach ($sourceRoot in $sourceRoots) {
     $sourceFiles += Get-ChildItem -LiteralPath (Join-Path $projectRoot $sourceRoot) -File -Recurse -Force
@@ -20,6 +20,10 @@ foreach ($sourceRoot in $sourceRoots) {
 
 $copiedFiles = 0
 foreach ($sourceFile in $sourceFiles) {
+    $relativePath = $sourceFile.FullName.Substring($projectRoot.Length + 1)
+    if ($relativePath -match '(^|[\\/])research([\\/]|$)') {
+        continue
+    }
     if (($sourceFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
         throw "Refusing linked source file: $($sourceFile.Name)"
     }
@@ -29,7 +33,6 @@ foreach ($sourceFile in $sourceFiles) {
     if ($sourceFile.Extension -in @('.pem', '.key', '.sqlite3', '.db', '.log', '.tar', '.gz')) {
         throw "Unexpected private or generated file in source roots: $($sourceFile.Name)"
     }
-    $relativePath = $sourceFile.FullName.Substring($projectRoot.Length + 1)
     $targetPath = Join-Path $stageRoot $relativePath
     New-Item -ItemType Directory -Path (Split-Path -Parent $targetPath) -Force | Out-Null
     Copy-Item -LiteralPath $sourceFile.FullName -Destination $targetPath

@@ -6,11 +6,31 @@
 {$PUBLIC_HOST} {
   encode zstd gzip
   header -Server
-  # A separate gate restricts the initial pilot before application registration.
-  basic_auth {
-    {$PILOT_USER} {$PILOT_PASSWORD_HASH}
+  # Search Console URL-prefix ownership files live in a dedicated read-only directory.
+  @googleVerification path_regexp ^/google[a-zA-Z0-9]+\.html$
+  handle @googleVerification {
+    root * /srv/qosyl-verification
+    file_server
   }
-  request_body {
+  @attachment path_regexp ^/api/projects/[^/]+/attachments$
+  @avatarUpload {
+    method POST
+    path /api/profile/avatar
+  }
+  @other {
+    not path_regexp ^/api/projects/[^/]+/attachments$
+    not {
+      method POST
+      path /api/profile/avatar
+    }
+  }
+  request_body @attachment {
+    max_size 5242880
+  }
+  request_body @avatarUpload {
+    max_size 2097152
+  }
+  request_body @other {
     max_size 128KB
   }
   reverse_proxy app:3000 {

@@ -51,46 +51,57 @@ enum PilotCostKind {
 
 // Identity and authentication. Better Auth owns Session, Account, Verification and RateLimit.
 model User {
-  id                   String                  @id
+  id                   String                   @id
   name                 String
-  email                String                  @unique
-  emailVerified        Boolean                 @default(false)
+  email                String                   @unique
+  emailVerified        Boolean                  @default(false)
   image                String?
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
   lastLoginAt          DateTime?
-  status               String                  @default("active")
+  status               String                   @default("active")
   statusReason         String?
-  roles                String[]                @default([])
-  demo                 Boolean                 @default(false)
+  roles                String[]                 @default([])
+  demo                 Boolean                  @default(false)
   adultConfirmedAt     DateTime?
   termsAcceptedAt      DateTime?
   sessions             Session[]
   accounts             Account[]
   studentProfile       StudentProfile?
+  avatar               ProfileAvatar?
   clientProfile        ClientProfile?
   externalWorks        ExternalPortfolioItem[]
-  clientProjects       Project[]               @relation("ClientProjects")
-  assignedProjects     Project[]               @relation("AssignedProjects")
+  clientProjects       Project[]                @relation("ClientProjects")
+  assignedProjects     Project[]                @relation("AssignedProjects")
   applications         Application[]
   submissions          Submission[]
   projectEvents        ProjectEvent[]
-  reviewsWritten       Review[]                @relation("ReviewAuthor")
-  reviewsReceived      Review[]                @relation("ReviewRecipient")
-  reports              Report[]                @relation("ReportAuthor")
-  reportsAgainst       Report[]                @relation("ReportTarget")
+  reviewsWritten       Review[]                 @relation("ReviewAuthor")
+  reviewsReceived      Review[]                 @relation("ReviewRecipient")
+  reports              Report[]                 @relation("ReportAuthor")
+  reportsAgainst       Report[]                 @relation("ReportTarget")
   notifications        Notification[]
+  notificationPreference NotificationPreference?
   moderation           ModerationAction[]
   portfolio            PortfolioRecord[]
   projectViews         ProjectView[]
-  pilotCostsRecorded   PilotCostEntry[]        @relation("PilotCostRecordedBy")
-  pilotCostsVoided     PilotCostEntry[]        @relation("PilotCostVoidedBy")
+  pilotCostsRecorded   PilotCostEntry[]         @relation("PilotCostRecordedBy")
+  pilotCostsVoided     PilotCostEntry[]         @relation("PilotCostVoidedBy")
   contentRunsRequested CrawlRun[]
   contentAudits        ContentAudit[]
-  leadsCreated         Lead[]                  @relation("LeadCreator")
-  leadsAssigned        Lead[]                  @relation("LeadAssignee")
-  leadsOwned           Lead[]                  @relation("LeadClient")
+  leadsCreated         Lead[]                   @relation("LeadCreator")
+  leadsAssigned        Lead[]                   @relation("LeadAssignee")
+  leadsOwned           Lead[]                   @relation("LeadClient")
   leadEvents           LeadEvent[]
+  opportunityFavorites OpportunityFavorite[]
+  opportunitySearches  SavedOpportunitySearch[]
+  projectAttachments   ProjectAttachment[]
+}
+
+model NotificationPreference {
+  userId   String @id
+  language String @default("ru")
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -150,6 +161,12 @@ model StudentProfile {
   userId      String   @id
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   bio         String   @default("")
+  headline    String   @default("")
+  studyYear   Int?
+  languages   String[] @default([])
+  experiences Json     @default("[]")
+  profileLinks Json    @default("[]")
+  hiddenFields String[] @default([])
   city        String   @default("")
   institution String   @default("")
   discipline  String   @default("")
@@ -181,8 +198,20 @@ model ExternalPortfolioItem {
   description String   @default("")
   url         String
   createdAt   DateTime @default(now())
+  role String @default("")
+  problem String @default("")
+  contribution String @default("")
+  period String @default("")
+  tools String[] @default([])
+  result String @default("")
+  links String[] @default([])
+  visibility String @default("draft")
+  publicationAllowed Boolean @default(false)
+  position Int @default(0)
+  revision String @default("legacy")
 
   @@index([userId, createdAt])
+  @@index([userId, position])
 }
 
 // Marketplace: Project is the aggregate root; Application belongs to one project and student.
@@ -230,6 +259,7 @@ model Project {
   views                   ProjectView[]
   pilotCosts              PilotCostEntry[]
   originatingLead         Lead?
+  attachments             ProjectAttachment[]
 
   @@unique([id, clientId])
   @@index([status, dueAt, publishedAt])
@@ -285,17 +315,50 @@ model ProjectMilestone {
 }
 
 model Submission {
-  id        String            @id @default(cuid())
-  projectId String
-  project   Project           @relation(fields: [projectId], references: [id])
-  studentId String
-  student   User              @relation(fields: [studentId], references: [id])
-  links     String[]
-  notes     String
-  createdAt DateTime          @default(now())
-  revisions RevisionRequest[]
+  id          String                 @id @default(cuid())
+  projectId   String
+  project     Project                @relation(fields: [projectId], references: [id])
+  studentId   String
+  student     User                   @relation(fields: [studentId], references: [id])
+  links       String[]
+  notes       String
+  createdAt   DateTime               @default(now())
+  revisions   RevisionRequest[]
+  attachments SubmissionAttachment[]
 
+  @@unique([id, projectId])
   @@index([projectId, createdAt])
+}
+
+model ProjectAttachment {
+  id          String                 @id @default(cuid())
+  projectId   String
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  uploaderId  String
+  uploader    User                   @relation(fields: [uploaderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  filename    String
+  mediaType   String
+  byteSize    Int
+  sha256      String
+  bytes       Bytes
+  createdAt   DateTime               @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  submissions SubmissionAttachment[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, uploaderId, sha256])
+  @@index([uploaderId, createdAt])
+  @@index([projectId, createdAt])
+}
+
+model SubmissionAttachment {
+  projectId    String
+  submissionId String
+  attachmentId String
+  submission   Submission        @relation(fields: [submissionId, projectId], references: [id, projectId], onDelete: Restrict, onUpdate: Cascade)
+  attachment   ProjectAttachment @relation(fields: [attachmentId, projectId], references: [id, projectId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([submissionId, attachmentId])
+  @@index([attachmentId, projectId])
 }
 
 model RevisionRequest {
@@ -553,21 +616,23 @@ model ContentSource {
 }
 
 model ContentItem {
-  id                 String            @id @default(cuid())
+  id                 String                   @id @default(cuid())
   sourceId           String
-  source             ContentSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  source             ContentSource            @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   externalId         String?
   canonicalUrl       String
   urlHash            String
-  status             String            @default("pending_review")
+  status             String                   @default("pending_review")
   approvedRevisionId String?
-  approvedRevision   ContentRevision?  @relation("ApprovedContentRevision", fields: [approvedRevisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvedRevision   ContentRevision?         @relation("ApprovedContentRevision", fields: [approvedRevisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   approvedAt         DateTime?
   expiresAt          DateTime?
-  createdAt          DateTime          @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
-  updatedAt          DateTime          @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
-  revisions          ContentRevision[] @relation("ContentRevisions")
+  createdAt          DateTime                 @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  updatedAt          DateTime                 @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)")) @updatedAt
+  revisions          ContentRevision[]        @relation("ContentRevisions")
   audits             ContentAudit[]
+  favorites          OpportunityFavorite[]
+  searchMatches      OpportunitySearchMatch[]
 
   @@unique([sourceId, externalId])
   @@unique([sourceId, urlHash])
@@ -642,4 +707,59 @@ model ContentAudit {
   @@index([createdAt])
   @@index([sourceId, createdAt])
   @@index([itemId, createdAt])
+}
+
+model OpportunityFavorite {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  itemId    String
+  item      ContentItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt DateTime    @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@unique([userId, itemId])
+  @@index([userId, createdAt])
+}
+
+model SavedOpportunitySearch {
+  id                    String                   @id @default(cuid())
+  userId                String
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  name                  String
+  queryHash             String
+  q                     String                   @default("")
+  category              String?
+  geography             String                   @default("")
+  specialty             String?
+  createdAt             DateTime                 @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  notificationFrequency String                   @default("off")
+  notificationSince     DateTime?
+  nextNotificationAt    DateTime?
+  matches               OpportunitySearchMatch[]
+
+  @@unique([userId, queryHash])
+  @@index([userId, createdAt])
+  @@index([notificationFrequency, nextNotificationAt])
+}
+
+model OpportunitySearchMatch {
+  id        String                 @id @default(cuid())
+  searchId  String
+  search    SavedOpportunitySearch @relation(fields: [searchId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  itemId    String
+  item      ContentItem            @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt DateTime               @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+
+  @@unique([searchId, itemId])
+  @@index([itemId])
+}
+
+// One sanitized image per account; never included in session/profile JSON.
+model ProfileAvatar {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bytes Bytes
+  revision String
+  isPublic Boolean @default(false)
+  updatedAt DateTime @updatedAt
 }

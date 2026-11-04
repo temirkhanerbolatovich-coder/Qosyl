@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { ViewData } from '../../src/contracts/api-responses';
 import {
   contentIntakeDataSchema,
@@ -186,11 +187,19 @@ async function register(
 ): Promise<Actor> {
   const api = await newApi();
   const email = `${name}-${run}@example.test`;
-  const result = await json<{ user: { id: string } }>(
-    await api.post('/api/auth/sign-up/email', {
+  const signup = () =>
+    api.post('/api/auth/sign-up/email', {
       data: { name: `ТЕСТ ${name}`, email, password, adultConfirmed: true, privacyConsent: true },
-    }),
-  );
+    });
+  let registration = await signup();
+  // Other suites share this isolated server and its real signup quota. Respect its retry window.
+  if (registration.status() === 429) {
+    const retrySeconds = Number(registration.headers()['x-retry-after']);
+    expect(Number.isFinite(retrySeconds) && retrySeconds >= 0 && retrySeconds <= 60).toBe(true);
+    await delay((retrySeconds + 1) * 1000);
+    registration = await signup();
+  }
+  const result = await json<{ user: { id: string } }>(registration);
   await json(
     await api.post('/api/profile', {
       data: {
@@ -692,6 +701,40 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       403,
     );
     await consent(client, projectId);
+    const agreedBefore = (await view<Work>(student.api, 'work', { id: projectId })).portfolio!;
+    const independentResponse = await student.api.post('/api/profile/portfolio', {
+      data: {
+        action: 'create',
+        data: {
+          title: 'Независимый кейс',
+          description: 'Учебный',
+          role: '',
+          problem: '',
+          contribution: '',
+          period: '',
+          tools: [],
+          result: '',
+          url: '',
+          links: [],
+          visibility: 'private',
+          publicationAllowed: false,
+        },
+      },
+    });
+    expect(independentResponse.ok()).toBe(true);
+    const independent = (await independentResponse.json()).data.items.find(
+      (item: { title: string }) => item.title === 'Независимый кейс',
+    );
+    expect(
+      (
+        await student.api.post('/api/profile/portfolio', {
+          data: { action: 'delete', id: independent.id, revision: independent.revision },
+        })
+      ).ok(),
+    ).toBe(true);
+    expect((await view<Work>(student.api, 'work', { id: projectId })).portfolio).toEqual(
+      agreedBefore,
+    );
     const visibleProfile = await (await guest.get(`/talent/${student.id}`)).text();
     expect(visibleProfile).toContain(publicTitle);
     expect(visibleProfile).not.toContain(`/private-result/${run}`);
@@ -893,7 +936,9 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       fullPage: true,
     });
     await studentPage.getByRole('button', { name: 'Сдать результат', exact: true }).click();
-    await expect(studentPage.getByRole('status')).toContainText('передан заказчику');
+    await expect(
+      studentPage.getByRole('status').filter({ hasText: 'передан заказчику' }),
+    ).toBeVisible();
     await clientPage.reload();
     await clientPage.getByText('Запросить конкретные правки', { exact: true }).click();
     await clientPage.getByLabel(projectInput.acceptanceCriteria[0], { exact: true }).check();
@@ -901,7 +946,9 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       .getByLabel('Что именно исправить?')
       .fill('По первому критерию добавьте контрольную строку общей суммы.');
     await clientPage.getByRole('button', { name: 'Отправить замечания' }).click();
-    await expect(clientPage.getByRole('status')).toContainText('Список правок передан');
+    await expect(
+      clientPage.getByRole('status').filter({ hasText: 'Список правок передан' }),
+    ).toBeVisible();
     await studentPage.reload();
     await studentPage
       .getByLabel('Ссылки на результат')
@@ -910,10 +957,14 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       .getByLabel('Комментарий к сдаче')
       .fill('Вторая мобильная сдача: контрольная сумма добавлена, замечание исправлено.');
     await studentPage.getByRole('button', { name: 'Сдать результат', exact: true }).click();
-    await expect(studentPage.getByRole('status')).toContainText('передан заказчику');
+    await expect(
+      studentPage.getByRole('status').filter({ hasText: 'передан заказчику' }),
+    ).toBeVisible();
     await clientPage.reload();
     await clientPage.getByRole('button', { name: 'Принять результат', exact: true }).click();
-    await expect(clientPage.getByRole('status')).toContainText('Результат принят');
+    await expect(
+      clientPage.getByRole('status').filter({ hasText: 'Результат принят' }),
+    ).toBeVisible();
     await expect(clientPage.getByRole('heading', { name: 'Подтверждённый опыт' })).toBeVisible();
     await assertNoHorizontalOverflow(clientPage);
     await clientPage.screenshot({
@@ -994,30 +1045,33 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
   }, testInfo) => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.goto('/auth/register');
-    await page.getByLabel('Отображаемое имя').fill('ТЕСТ мобильный участник');
-    await page.getByLabel('Email', { exact: true }).fill(`mobile-${run}@example.test`);
-    await page.getByLabel('Пароль', { exact: true }).fill(password);
-    await page.getByLabel('Повторите пароль').fill(password);
-    await page.getByLabel('Мне исполнилось 18 лет').check();
-    await page.getByRole('checkbox').nth(1).check();
+    const emailForm = page.locator('main form').filter({
+      has: page.locator('input[name="email"]'),
+    });
+    await emailForm.getByLabel('Отображаемое имя').fill('ТЕСТ мобильный участник');
+    await emailForm.getByLabel('Email', { exact: true }).fill(`mobile-${run}@example.test`);
+    await emailForm.getByLabel('Пароль', { exact: true }).fill(password);
+    await emailForm.getByLabel('Повторите пароль').fill(password);
+    await emailForm.getByLabel('Мне исполнилось 18 лет').check();
+    await emailForm.locator('input[name="privacyConsent"]').check();
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath('mobile-registration.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+    await emailForm.getByRole('button', { name: 'Создать аккаунт' }).click();
     await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByRole('heading').first()).toBeVisible();
     await assertNoHorizontalOverflow(page);
     await page.context().clearCookies();
     await page.goto('/auth/login');
     await page.route('**/api/auth/sign-in/email', (route) => route.abort('failed'));
-    await page.getByLabel('Email', { exact: true }).fill(`mobile-${run}@example.test`);
-    await page.getByLabel('Пароль', { exact: true }).fill(password);
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await emailForm.getByLabel('Email', { exact: true }).fill(`mobile-${run}@example.test`);
+    await emailForm.getByLabel('Пароль', { exact: true }).fill(password);
+    await emailForm.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Нет связи с сервером' })).toBeVisible();
     await page.unroute('**/api/auth/sign-in/email');
     await page.route('**/api/auth/sign-in/email', () => {
       /* Keep the browser request pending to exercise the actual AbortSignal timeout. */
     });
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await emailForm.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(
       page.getByRole('alert').filter({ hasText: 'Сервер не ответил вовремя' }),
     ).toBeVisible({ timeout: 25_000 });
@@ -1108,9 +1162,8 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
     const uiTitle = `E2E ${run}: заказ создан через настоящую форму`;
     await clientPage.goto('/client/projects/new');
     await clientPage.locator('[name="title"]').fill(uiTitle);
-    await clientPage
-      .getByRole('button', { name: 'Сводная таблица до 100 строк', exact: true })
-      .click();
+    await clientPage.getByRole('combobox', { name: 'Шаблон задачи' }).selectOption('spreadsheet');
+    await clientPage.getByRole('button', { name: 'Заполнить пустые поля', exact: true }).click();
     await expect(clientPage.locator('[name="title"]')).toHaveValue(uiTitle);
     await expect(clientPage.locator('[name="category"]')).toHaveValue('spreadsheets');
     await expect(clientPage.locator('[name="budgetKzt"]')).toHaveValue('');
@@ -1584,6 +1637,16 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await queueCard.getByRole('button', { name: 'Проверить и открыть историю' }).click();
       const editor = panel.getByRole('region', { name: 'Редакционная проверка' });
       const review = editor.getByRole('form', { name: 'Решение по материалу' });
+      await expect(
+        editor.getByRole('button', { name: 'Проверить сроки и условия на сайте' }),
+      ).toBeVisible();
+      for (const width of [375, 768, 1440, 1920]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await assertNoHorizontalOverflow(page);
+        await editor.screenshot({
+          path: testInfo.outputPath('inspection-editor-' + width + '.png'),
+        });
+      }
       await review
         .locator('[name="reason"]')
         .fill('Оригинал и условия проверены; синтетический материал E2E.');

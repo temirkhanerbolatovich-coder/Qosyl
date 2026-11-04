@@ -1,0 +1,1 @@
+ALTER TABLE "StudentProfile" ADD COLUMN "headline" TEXT NOT NULL DEFAULT '';

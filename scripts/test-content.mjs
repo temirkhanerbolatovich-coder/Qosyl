@@ -33,6 +33,8 @@ try {
       'tests/content-intake.integration.mts',
       'tests/content-publication.integration.mts',
       'tests/opportunity-discovery.integration.mts',
+      'tests/opportunity-saved.integration.mts',
+      'tests/opportunity-search-notifications.integration.mts',
     ],
     { env, stdio: 'inherit', windowsHide: true },
   );

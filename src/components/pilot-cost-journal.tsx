@@ -1,4 +1,5 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import { useRef, useState } from 'react';
 import { date, money } from '@/lib/labels';
 import { ActionFeedback, LoadState, useAction, useData } from './platform';
@@ -10,6 +11,7 @@ const kindLabels = {
   operations: 'Эксплуатация',
 };
 export function PilotCostJournal() {
+  const { locale, copy } = useMarketplaceCopy();
   const [page, setPage] = useState(1);
   const { data, error, loading, refresh } = useData('pilotCosts', { page: String(page) });
   const action = useAction(refresh);
@@ -43,38 +45,39 @@ export function PilotCostJournal() {
   }
 
   return (
-    <section className="panel stack" aria-label="Журнал затрат пилота">
-      <h2>Журнал затрат пилота</h2>
+    <section lang={locale} className="panel stack" aria-label={copy('Журнал затрат пилота')}>
+      <h2>{copy('Журнал затрат пилота')}</h2>
       <p className="muted small-text">
-        Время команды и денежные расходы учитываются отдельно за всю историю журнала. Стоимость часа
-        и доход площадки автоматически не предполагаются. Не записывайте контакты, реквизиты и
-        другие персональные данные в описание.
+        {copy(
+          'Время команды и денежные расходы учитываются отдельно за всю историю журнала. Стоимость часа и доход площадки автоматически не предполагаются. Не записывайте контакты, реквизиты и другие персональные данные в описание.',
+        )}
       </p>
       {data && (
         <p>
-          Учтено: {data.totals.minutes} мин. и {money(data.totals.amountKzt)} в{' '}
-          {data.totals.entries} записях. Отменено: {data.totals.voidedEntries}.
+          {copy('Учтено:')} {data.totals.minutes} {copy('мин. и')}{' '}
+          {money(data.totals.amountKzt, locale)} {copy('в')} {data.totals.entries}{' '}
+          {copy('записях. Отменено:')} {data.totals.voidedEntries}.
         </p>
       )}
       <ActionFeedback error={action.error} success={action.success} />
       <form ref={form} className="stack" onSubmit={save}>
         <div className="form-grid">
           <label className="field">
-            Категория расхода
+            {copy('Категория расхода')}{' '}
             <select name="kind" defaultValue="moderation" disabled={action.busy}>
               {Object.entries(kindLabels).map(([kind, label]) => (
                 <option key={kind} value={kind}>
-                  {label}
+                  {copy(label)}
                 </option>
               ))}
             </select>
           </label>
           <label className="field">
-            Дата и время расхода (время устройства)
+            {copy('Дата и время расхода (время устройства)')}{' '}
             <input name="occurredAt" type="datetime-local" required disabled={action.busy} />
           </label>
           <label className="field">
-            Время команды, минут
+            {copy('Время команды, минут')}{' '}
             <input
               name="minutes"
               type="number"
@@ -87,7 +90,7 @@ export function PilotCostJournal() {
             />
           </label>
           <label className="field">
-            Денежный расход, ₸
+            {copy('Денежный расход, ₸')}{' '}
             <input
               name="amountKzt"
               type="number"
@@ -101,27 +104,28 @@ export function PilotCostJournal() {
           </label>
         </div>
         <label className="field">
-          ID реального проекта (необязательно)
+          {copy('ID реального проекта (необязательно)')}{' '}
           <input name="projectId" maxLength={100} disabled={action.busy} />
         </label>
         <label className="field">
-          Описание расхода
+          {copy('Описание расхода')}{' '}
           <textarea
             name="description"
             minLength={3}
             maxLength={1000}
             required
             disabled={action.busy}
-            placeholder="Например, проверка брифа и критериев приёмки"
+            placeholder={copy('Например, проверка брифа и критериев приёмки')}
           />
         </label>
         <p className="muted small-text">
-          Если ответ потерян, повторите сохранение с теми же полями. Ключ запроса сохраняется до
-          подтверждения. Перед созданием другой записи обновите журнал и проверьте результат.
+          {copy(
+            'Если ответ потерян, повторите сохранение с теми же полями. Ключ запроса сохраняется до подтверждения. Перед созданием другой записи обновите журнал и проверьте результат.',
+          )}
         </p>
         <div className="button-row">
           <button className="button" type="submit" disabled={action.busy}>
-            Сохранить расход
+            {copy('Сохранить расход')}
           </button>
           <button
             className="button secondary"
@@ -132,7 +136,7 @@ export function PilotCostJournal() {
               form.current?.reset();
             }}
           >
-            Новая запись
+            {copy('Новая запись')}
           </button>
           <button
             className="button secondary"
@@ -140,7 +144,7 @@ export function PilotCostJournal() {
             disabled={action.busy}
             onClick={() => void refresh()}
           >
-            Обновить журнал
+            {copy('Обновить журнал')}
           </button>
         </div>
       </form>
@@ -149,20 +153,32 @@ export function PilotCostJournal() {
       ) : (
         data && (
           <>
-            {!data.entries.length && <p className="muted">Записей на этой странице нет.</p>}
+            {!data.entries.length && (
+              <p className="muted">{copy('Записей на этой странице нет.')}</p>
+            )}
             {data.entries.map((entry) => (
               <article className="summary-card stack" key={entry.id}>
                 <strong style={{ textDecoration: entry.voidedAt ? 'line-through' : undefined }}>
-                  {kindLabels[entry.kind]} · {entry.minutes} мин. · {money(entry.amountKzt)}
+                  {copy(kindLabels[entry.kind])} · {entry.minutes} {copy('мин. ·')}{' '}
+                  {money(entry.amountKzt, locale)}
                 </strong>
-                <p>{entry.description}</p>
+                <p>
+                  <span lang="und">{entry.description}</span>
+                </p>
                 <p className="muted small-text">
-                  Расход: {date(entry.occurredAt, true)}. Записан: {date(entry.createdAt, true)}.
-                  {entry.projectId && <> Проект: {entry.projectId}.</>}
+                  {copy('Расход:')} {date(entry.occurredAt, true, locale)}
+                  {copy('. Записан:')} {date(entry.createdAt, true, locale)}.
+                  {entry.projectId && (
+                    <>
+                      {' '}
+                      {copy('Проект:')} {entry.projectId}.
+                    </>
+                  )}
                 </p>
                 {entry.voidedAt ? (
                   <p className="muted">
-                    Отменено {date(entry.voidedAt, true)}: {entry.voidReason}
+                    {copy('Отменено')} {date(entry.voidedAt, true, locale)}:{' '}
+                    <span lang="und">{entry.voidReason}</span>
                   </p>
                 ) : voidId === entry.id ? (
                   <form
@@ -179,7 +195,7 @@ export function PilotCostJournal() {
                     }}
                   >
                     <label className="field">
-                      Причина отмены
+                      {copy('Причина отмены')}{' '}
                       <textarea
                         name="reason"
                         required
@@ -190,7 +206,7 @@ export function PilotCostJournal() {
                     </label>
                     <div className="button-row">
                       <button className="button secondary" disabled={action.busy}>
-                        Подтвердить отмену записи
+                        {copy('Подтвердить отмену записи')}
                       </button>
                       <button
                         className="button secondary"
@@ -198,7 +214,7 @@ export function PilotCostJournal() {
                         disabled={action.busy}
                         onClick={() => setVoidId(null)}
                       >
-                        Оставить запись
+                        {copy('Оставить запись')}
                       </button>
                     </div>
                   </form>
@@ -209,7 +225,7 @@ export function PilotCostJournal() {
                     disabled={action.busy}
                     onClick={() => setVoidId(entry.id)}
                   >
-                    Отменить ошибочную запись
+                    {copy('Отменить ошибочную запись')}
                   </button>
                 )}
               </article>
@@ -221,16 +237,18 @@ export function PilotCostJournal() {
                 disabled={page === 1 || loading}
                 onClick={() => setPage((current) => current - 1)}
               >
-                Предыдущая страница
+                {copy('Предыдущая страница')}
               </button>
-              <span>Страница {data.page}</span>
+              <span>
+                {copy('Страница')} {data.page}
+              </span>
               <button
                 className="button secondary"
                 type="button"
                 disabled={!data.hasMore || loading}
                 onClick={() => setPage((current) => current + 1)}
               >
-                Следующая страница
+                {copy('Следующая страница')}
               </button>
             </div>
           </>

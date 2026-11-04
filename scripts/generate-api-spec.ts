@@ -1,3 +1,15 @@
+import { caseCommand, caseListResponse } from '../src/lib/portfolio-case';
+import { opportunitySavedCommand } from '../src/lib/opportunity-saved';
+import {
+  projectAttachmentSchema,
+  projectAttachmentListSchema,
+  projectAttachmentMutationSchema,
+  projectAttachmentDeleteSchema,
+} from '../src/contracts/project-attachments';
+import {
+  opportunitySavedDataSchema,
+  opportunitySavedMutationSchema,
+} from '../src/contracts/opportunity-saved';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -5,6 +17,8 @@ import { z } from 'zod';
 import { categories, mutationSchemas, type Action } from '../src/lib/validation';
 import { catalogQuerySchema, platformViews } from '../src/lib/catalog-query';
 import { profileInput } from '../src/app/api/profile/schema';
+import { avatarVisibilityInput, avatarDeleteInput, avatarResponse } from '../src/contracts/avatar';
+import { notificationLanguageInput } from '../src/lib/notification-language';
 import {
   threadsSearchInput,
   threadsSearchDataSchema,
@@ -30,6 +44,7 @@ import {
   contentEditInput,
   contentStatuses,
   manualContentInput,
+  contentInspectionInput,
   requestSyncInput,
   sourceInput,
   manualCategories,
@@ -77,7 +92,8 @@ const actionAccess = {
   proposeAgreement:
     'Project participant; state permits changed terms; creates a new immutable version.',
   toggleMilestone: 'Project participant; milestone belongs to the project and relevant agreement.',
-  submitDeliverable: 'Student role and assigned student; both participants approved the terms.',
+  submitDeliverable:
+    'Student role and assigned student; in_progress/changes_requested. One to five combined HTTPS links and owned project attachmentIds, with no repeated attachment ID. Both parties must have approved terms for attachments. File references bind atomically and remain immutable; own files may be reused in later submissions. Private /api/attachments links must use attachmentIds instead. The serialized Submission response stays unchanged.',
   requestChanges: 'Client role and project owner; latest submission, specific agreed criteria.',
   acceptSubmission: 'Client role and project owner; latest submission in submitted state.',
   acknowledgePayment:
@@ -245,6 +261,7 @@ const contentInputs = {
   requestSync: requestSyncInput,
   addManualContent: manualContentInput,
   reviewContent: contentReviewInput,
+  inspectContentPage: contentInspectionInput,
   editContent: contentEditInput,
 };
 const contentActionAccess = {
@@ -260,6 +277,8 @@ const contentActionAccess = {
     'Admin only; enabled module and enabled manual source. URL hostname must exactly match the source. Stores plain text in a closed pending_review queue with immutable revisions; an identical current revision returns duplicate. Returning to earlier content creates a new revision. No publication or marketplace project is created.',
   reviewContent:
     'Admin only. Requires expectedRevisionId and expectedUpdatedAt matching the current item. Decisions publish/reject/archive/withdraw/reopen require a reason of 10-2000 characters. Publish requires enabled module/source, pending_review and the latest immutable URL snapshot. Explicit expiresAt must be future and within 90 days, capped by earlier known deadline/eventDate. Other decisions remain available while disabled. Reopen is an explicit human action for a terminal item, never automatic import.',
+  inspectContentPage:
+    'Admin only. Requires current revision and updatedAt, enabled source/module. Bounded HTTPS inspection; one request per minute per actor or item. Appends evidence without changing content or publication.',
   editContent:
     'Admin only. Saves a new immutable editorial snapshot for an active item and moves it to pending_review, hiding any old publication. Requires current expectedRevisionId/expectedUpdatedAt and a reason. Retains prior approval and history; never edits historical rows. URLs must match the source host.',
 } satisfies Record<keyof typeof contentInputs, string>;
@@ -271,6 +290,7 @@ const contentResultSchemas = {
   requestSync: contentMutationDataSchema.options[2],
   addManualContent: contentMutationDataSchema.options[3],
   reviewContent: contentMutationDataSchema.options[0],
+  inspectContentPage: contentMutationDataSchema.options[0],
   editContent: contentMutationDataSchema.options[0],
 };
 
@@ -380,6 +400,314 @@ export function buildApiSpec() {
       },
     ],
     paths: {
+      '/api/profile/avatar': {
+        get: {
+          operationId: 'getOwnAvatar',
+          tags: ['Profile'],
+          summary: 'Read own avatar metadata, never bytes',
+          security: cookieSecurity,
+          responses: {
+            '200': {
+              description: 'Private no-store metadata; null when absent.',
+              content: { 'application/json': { schema: requestSchema(avatarResponse) } },
+            },
+            '401': errors['401'],
+          },
+        },
+        post: {
+          operationId: 'uploadOwnAvatar',
+          tags: ['Profile'],
+          summary: 'Upload or replace own private avatar',
+          security: cookieSecurity,
+          description:
+            'Active student, verified email outside local mode, same Origin. Ten mutation attempts/minute before body decoding. Raw JPEG/PNG <=2097152 bytes, static <=16MP; re-encoded JPEG <=512x512 and 524288 bytes, metadata removed. Replaces previous bytes and resets publication to false. No userId input. Transactional audit.',
+          parameters: [{ $ref: '#/components/parameters/Origin' }],
+          requestBody: {
+            required: true,
+            content: {
+              'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+              'image/png': { schema: { type: 'string', format: 'binary' } },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Saved private avatar metadata.',
+              content: { 'application/json': { schema: requestSchema(avatarResponse) } },
+            },
+            '400': errors['400'],
+            '401': errors['401'],
+            '403': errors['403'],
+            '413': errors['413'],
+            '415': errors['415'],
+            '429': errors['429'],
+          },
+        },
+        patch: {
+          operationId: 'setAvatarVisibility',
+          tags: ['Profile'],
+          summary: 'Allow or revoke publication of the current avatar',
+          security: cookieSecurity,
+          description:
+            'Same student/origin/rate checks as upload. 1024-byte JSON limit. Revision is required; stale revisions fail409. Public image additionally requires a public student profile. Changes rotate revision and append audit.',
+          parameters: [{ $ref: '#/components/parameters/Origin' }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: requestSchema(avatarVisibilityInput) } },
+          },
+          responses: {
+            '200': {
+              description: 'Updated avatar metadata.',
+              content: { 'application/json': { schema: requestSchema(avatarResponse) } },
+            },
+            '400': errors['400'],
+            '401': errors['401'],
+            '403': errors['403'],
+            '409': errors['409'],
+            '429': errors['429'],
+          },
+        },
+        delete: {
+          operationId: 'deleteOwnAvatar',
+          tags: ['Profile'],
+          summary: 'Remove current avatar bytes and metadata',
+          security: cookieSecurity,
+          description:
+            'Same student/origin/rate checks as upload. 1024-byte JSON with current revision; stale revisions fail409. Audit remains; backup retention is separate.',
+          parameters: [{ $ref: '#/components/parameters/Origin' }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: requestSchema(avatarDeleteInput) } },
+          },
+          responses: {
+            '200': {
+              description: 'avatar:null.',
+              content: { 'application/json': { schema: requestSchema(avatarResponse) } },
+            },
+            '401': errors['401'],
+            '403': errors['403'],
+            '409': errors['409'],
+            '429': errors['429'],
+          },
+        },
+      },
+      '/api/avatars/{userId}': {
+        get: {
+          operationId: 'readAvatarImage',
+          tags: ['Profile'],
+          summary: 'Read sanitized avatar subject to current visibility',
+          description:
+            'Owner or explicitly published avatar of active public student profile. Demo visibility enforced. Unavailable and private images both return404. Always private,no-store; nosniff and same-origin CORP. No Next image cache.',
+          parameters: [
+            {
+              in: 'path',
+              name: 'userId',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Sanitized JPEG.',
+              content: { 'image/jpeg': { schema: { type: 'string', format: 'binary' } } },
+            },
+            '404': errors['404'],
+          },
+        },
+      },
+      '/api/projects/{id}/attachments': {
+        get: {
+          operationId: 'listProjectAttachments',
+          tags: ['Marketplace'],
+          security: cookieSecurity,
+          summary: 'Read private participant file metadata',
+          description:
+            'Active project client or currently assigned student, after at least one mutually approved agreement. No implicit administrator access; foreign/missing projects return404. Up to20 files. Metadata excludes bytes/hash and always declares unscanned. Read access remains after completion, cancellation or dispute; public catalogue/portfolio never include these relations.',
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+          ],
+          responses: {
+            '200': successResponse(
+              'Private metadata only.',
+              schemaRef('ProjectAttachmentListResponse'),
+            ),
+            ...errors,
+          },
+        },
+        post: {
+          operationId: 'uploadProjectAttachment',
+          tags: ['Marketplace'],
+          security: cookieSecurity,
+          summary: 'Upload a bounded private file to the participant workspace',
+          description:
+            'Same-origin raw binary body, not multipart or JSON. Active verified account (local mode exception), client/assigned student after mutual agreement, in_progress/changes_requested only. Content-Length and actual stream bounded to5242880 bytes, read timeout20s. Extension/MIME/signature checked, not antivirus scanned. PDF, PNG, JPEG and UTF8 TXT only. Up to20 files/50MiB per project and100MiB per uploader under user/project locks. A retry of identical bytes by the same uploader/project returns the original metadata/name. Upload shares in the private workspace immediately; formal submission remains a separate action.20 authorized upload attempts/minute are counted before body reading, including failed format/quota attempts.',
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+            { $ref: '#/components/parameters/Origin' },
+            {
+              name: 'X-File-Name',
+              in: 'header',
+              required: true,
+              description:
+                'encodeURIComponent of the display filename, at most120 decoded characters, with no path/control characters.',
+              schema: { type: 'string', minLength: 1 },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: Object.fromEntries(
+              ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'].map((type) => [
+                type,
+                { schema: { type: 'string', format: 'binary' } },
+              ]),
+            ),
+            'x-max-bytes': 5242880,
+          },
+          responses: {
+            '200': successResponse(
+              'Stored or deduplicated private file.',
+              schemaRef('ProjectAttachmentMutationResponse'),
+            ),
+            ...errors,
+            '415': errorResponse(
+              'Unsupported file extension/MIME or invalid format markers. No archive, Office, executable, SVG or HTML upload support.',
+            ),
+          },
+        },
+      },
+      '/api/attachments/{id}': {
+        get: {
+          operationId: 'downloadProjectAttachment',
+          tags: ['Marketplace'],
+          security: cookieSecurity,
+          summary: 'Download bytes as an attachment after fresh participant authorization',
+          description:
+            'Same participant/agreement boundary as metadata; no administrator bypass. Bytes and SHA256/size are checked before sending. Forced download, octet-stream, nosniff, CSP sandbox, same-origin resource policy, private/no-store. Format validation is not malware scanning; files remain unscanned.',
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Private binary bytes; never inline preview.',
+              headers: {
+                'Cache-Control': cacheHeader,
+                'Content-Disposition': {
+                  schema: { type: 'string' },
+                  description: 'attachment with ASCII fallback and encoded UTF8 filename*.',
+                },
+                'X-Content-Type-Options': { schema: { type: 'string', const: 'nosniff' } },
+                'Content-Security-Policy': { schema: { type: 'string', const: 'sandbox' } },
+              },
+              content: {
+                'application/octet-stream': { schema: { type: 'string', format: 'binary' } },
+              },
+            },
+            ...errors,
+          },
+        },
+        delete: {
+          operationId: 'deleteProjectAttachment',
+          tags: ['Marketplace'],
+          security: cookieSecurity,
+          summary: 'Remove only an own file that has never been bound to a submission',
+          description:
+            'Same-origin, active verified uploader (local exception) and project participant after mutual agreement. Own unbound files may be removed even after work ends. A bound file returns409 to preserve history. Foreign/absent targets both404. Deletion frees stored bytes; no request body.',
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+            { $ref: '#/components/parameters/Origin' },
+          ],
+          responses: {
+            '200': successResponse(
+              'Own unbound file removed.',
+              schemaRef('ProjectAttachmentDeleteResponse'),
+            ),
+            ...errors,
+          },
+        },
+      },
+      '/api/opportunities/saved': {
+        get: {
+          operationId: 'getOpportunitySaves',
+          tags: ['Content intake'],
+          security: cookieSecurity,
+          summary: 'Read the current account favorites and saved searches',
+          description:
+            'Active account only, including users without a completed profile. Private no-store. Up to 100 favorites and 20 searches, newest first. A favorite returns post:null when content is not publicly visible; no draft, withdrawn or expired title/URL is exposed. No userId parameter and no remote I/O.',
+          responses: {
+            '200': successResponse(
+              'Private current-account lists.',
+              schemaRef('OpportunitySavedResponse'),
+            ),
+            '401': errors['401'],
+            '403': errors['403'],
+            '500': errors['500'],
+          },
+        },
+        post: {
+          operationId: 'mutateOpportunitySaves',
+          tags: ['Content intake'],
+          security: cookieSecurity,
+          summary: 'Save own favorites/searches and set opt-in local search notifications',
+          description:
+            'Active account only. Same-origin JSON, at most 8192 bytes. Commands have set/remove semantics, not toggle semantics. Only publicly available content can be newly saved; existing unavailable favorites can be removed. Searches normalize NFKC/case/whitespace, exclude page/limit and deduplicate per account. At most 100 favorites and 20 searches under a per-user lock. Removing another account record is a harmless no-op. setSearchNotifications requires an own search (404 for foreign/missing) and frequency off/daily/weekly; default off. A repeated frequency is a no-op and does not postpone the next check. Enabling starts a new baseline and schedules after 24 hours / 7 days; changing an active frequency reschedules without erasing delivery identity. Notifications are generic local Qosyl inbox digests of up to 50 new matching publicly visible materials per due search. No external delivery or automatic publication.',
+          parameters: [{ $ref: '#/components/parameters/Origin' }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: schemaRef('OpportunitySavedCommand'),
+                examples: {
+                  saveFavorite: { value: { action: 'saveFavorite', itemId: 'public-content-id' } },
+                  saveSearch: {
+                    value: {
+                      action: 'saveSearch',
+                      name: 'Медицина',
+                      filters: { q: 'стажировка', geography: '', specialty: 'health' },
+                    },
+                  },
+                  removeFavorite: {
+                    value: { action: 'removeFavorite', favoriteId: 'own-favorite-id' },
+                  },
+                  removeSearch: { value: { action: 'removeSearch', searchId: 'own-search-id' } },
+                  setSearchNotifications: {
+                    value: {
+                      action: 'setSearchNotifications',
+                      searchId: 'own-search-id',
+                      frequency: 'daily',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': successResponse(
+              'Own preferences saved; repeated requests are safe.',
+              schemaRef('OpportunitySavedMutationResponse'),
+            ),
+            ...errors,
+          },
+        },
+      },
       '/api/admin/leads/threads': {
         get: {
           operationId: 'threadsSearchStatus',
@@ -709,6 +1037,39 @@ export function buildApiSpec() {
           },
         },
       },
+      '/api/notification-language': {
+        get: {
+          operationId: 'getOwnNotificationLanguage',
+          tags: ['Profile'],
+          security: cookieSecurity,
+          summary: 'Read the current account notification language',
+          responses: {
+            '200': successResponse(
+              'Own preference, Russian by default.',
+              schemaRef('NotificationLanguageResponse'),
+            ),
+            '401': errors['401'],
+            '500': errors['500'],
+          },
+        },
+        post: {
+          operationId: 'setOwnNotificationLanguage',
+          tags: ['Profile'],
+          security: cookieSecurity,
+          summary: 'Set the language for future notifications',
+          description:
+            'Changes only the current account. Existing notifications are not rewritten.',
+          parameters: [{ $ref: '#/components/parameters/Origin' }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: schemaRef('NotificationLanguageInput') } },
+          },
+          responses: {
+            '200': successResponse('Saved preference.', schemaRef('NotificationLanguageResponse')),
+            ...errors,
+          },
+        },
+      },
       '/api/profile': {
         get: {
           operationId: 'getOwnProfile',
@@ -732,7 +1093,7 @@ export function buildApiSpec() {
           summary: 'Save a student or client profile of the current account',
           security: cookieSecurity,
           description:
-            'Same-origin JSON only; maximum streamed body 16384 bytes. Role is student or client; requests cannot set admin, verification flags, or another account ID. Client profile changes reset verification to pending; public work URLs require HTTPS without embedded credentials. The update and audit record are transactional.',
+            'Same-origin JSON only; maximum streamed body 16384 bytes. Role is student or client; requests cannot set admin, verification flags, or another account ID. Client profile changes reset verification to pending; public work URLs require HTTPS without embedded credentials, IP literals or local hostnames. DNS is not resolved and URLs are not fetched. The update and audit record are transactional.',
           parameters: [{ $ref: '#/components/parameters/Origin' }],
           requestBody: {
             required: true,
@@ -770,6 +1131,41 @@ export function buildApiSpec() {
             '413': errors['413'],
             '415': errors['415'],
             '503': errors['503'],
+          },
+        },
+      },
+      '/api/profile/portfolio': {
+        get: {
+          operationId: 'readPortfolioCases',
+          tags: ['Profile'],
+          summary: 'Read own independent cases in display order',
+          security: cookieSecurity,
+          responses: {
+            '200': successResponse('Own cases, including drafts.', requestSchema(caseListResponse)),
+            '401': errors['401'],
+            '403': errors['403'],
+          },
+        },
+        post: {
+          operationId: 'changePortfolioCase',
+          tags: ['Profile'],
+          summary: 'Create, update, delete or reorder own self-reported cases',
+          security: cookieSecurity,
+          description:
+            'Same-origin student account, verified email outside local mode. 32 KiB JSON, 30 cases, 40 successful commands/minute. New UI cases start as drafts. Publishing requires explicit permission; no platform verification flag is accepted. Update/delete use revision, reorder requires the complete current set of IDs and revisions. Legacy profile bulk updates cannot replace existing cases.',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: requestSchema(caseCommand) } },
+          },
+          responses: {
+            '200': successResponse('Saved own case list.', requestSchema(caseListResponse)),
+            '400': errors['400'],
+            '401': errors['401'],
+            '403': errors['403'],
+            '404': errors['404'],
+            '409': errors['409'],
+            '413': errors['413'],
+            '429': errors['429'],
           },
         },
       },
@@ -1165,11 +1561,33 @@ export function buildApiSpec() {
         },
       },
       schemas: {
+        ProjectAttachment: responseSchema(projectAttachmentSchema, 'ProjectAttachment'),
+        ProjectAttachmentListData: responseSchema(
+          projectAttachmentListSchema,
+          'ProjectAttachmentListData',
+        ),
+        ProjectAttachmentListResponse: dataEnvelope('ProjectAttachmentListData'),
+        ProjectAttachmentMutationData: responseSchema(
+          projectAttachmentMutationSchema,
+          'ProjectAttachmentMutationData',
+        ),
+        ProjectAttachmentMutationResponse: dataEnvelope('ProjectAttachmentMutationData'),
+        ProjectAttachmentDeleteData: responseSchema(
+          projectAttachmentDeleteSchema,
+          'ProjectAttachmentDeleteData',
+        ),
+        ProjectAttachmentDeleteResponse: dataEnvelope('ProjectAttachmentDeleteData'),
         ApiError: {
           ...responseSchema(apiErrorSchema, 'ApiError'),
           examples: [{ error: 'Войдите в аккаунт.', code: 'UNAUTHENTICATED' }],
         },
         ProfileInput: requestSchema(profileInput),
+        NotificationLanguageInput: requestSchema(notificationLanguageInput),
+        NotificationLanguageData: responseSchema(
+          notificationLanguageInput,
+          'NotificationLanguageData',
+        ),
+        NotificationLanguageResponse: dataEnvelope('NotificationLanguageData'),
         ThreadsSearchInput: requestSchema(threadsSearchInput),
         ThreadsSearchData: responseSchema(threadsSearchDataSchema, 'ThreadsSearchData'),
         ThreadsSearchResponse: dataEnvelope('ThreadsSearchData'),
@@ -1193,6 +1611,14 @@ export function buildApiSpec() {
         ProfileSaved: dataEnvelope('ProfileSavedData'),
         HealthOk: responseSchema(okHealthSchema, 'HealthOk'),
         HealthUnavailable: responseSchema(unavailableHealthSchema, 'HealthUnavailable'),
+        OpportunitySavedCommand: requestSchema(opportunitySavedCommand),
+        OpportunitySavedData: responseSchema(opportunitySavedDataSchema, 'OpportunitySavedData'),
+        OpportunitySavedResponse: dataEnvelope('OpportunitySavedData'),
+        OpportunitySavedMutationData: responseSchema(
+          opportunitySavedMutationSchema,
+          'OpportunitySavedMutationData',
+        ),
+        OpportunitySavedMutationResponse: dataEnvelope('OpportunitySavedMutationData'),
         ContentIntakeData: responseSchema(contentIntakeDataSchema, 'ContentIntakeData'),
         ContentIntakeResponse: dataEnvelope('ContentIntakeData'),
         ContentDetailData: responseSchema(contentDetailDataSchema, 'ContentDetailData'),

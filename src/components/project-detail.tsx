@@ -1,4 +1,5 @@
 'use client';
+import { useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
@@ -10,7 +11,8 @@ import {
   MapPin,
   ShieldCheck,
 } from 'lucide-react';
-import { categoryLabels, date, lines, modeLabels, money } from '@/lib/labels';
+import { date, lines, money } from '@/lib/labels';
+import { localizedCategoryLabels, localizedModeLabels } from '@/lib/localized-labels';
 import {
   ActionFeedback,
   DemoBadge,
@@ -31,10 +33,11 @@ export function ComplaintForm({
   projectId: string;
   compact?: boolean;
 }) {
+  const { locale, copy } = useMarketplaceCopy();
   const action = useAction();
   return (
-    <details className="details-toggle">
-      <summary>{compact ? 'Сообщить о проблеме' : 'Пожаловаться на заказ'}</summary>
+    <details className="details-toggle" lang={locale}>
+      <summary>{compact ? copy('Сообщить о проблеме') : copy('Пожаловаться на заказ')}</summary>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -47,24 +50,25 @@ export function ComplaintForm({
         }}
       >
         <label className="field">
-          Что произошло?
+          {copy('Что произошло?')}{' '}
           <textarea
             name="reason"
             required
             minLength={10}
             maxLength={2000}
-            placeholder="Опишите проблему без чужих персональных данных"
+            placeholder={copy('Опишите проблему без чужих персональных данных')}
           />
         </label>
         <ActionFeedback error={action.error} success={action.success} />
         <button className="button secondary small" disabled={action.busy} type="submit">
-          Отправить жалобу
+          {copy('Отправить жалобу')}
         </button>
       </form>
     </details>
   );
 }
 export function ProjectDetailScreen({ id }: { id: string }) {
+  const { locale, copy } = useMarketplaceCopy();
   const viewer = useViewer();
   const { data, loading, error, refresh } = useData('project', { id });
   const action = useAction(refresh);
@@ -78,13 +82,13 @@ export function ProjectDetailScreen({ id }: { id: string }) {
   }, [viewer]);
   if (loading && !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState />
       </div>
     );
   if (error || !data)
     return (
-      <div className="page-shell">
+      <div className="page-shell" lang={locale}>
         <LoadState error={error || 'Заказ не найден'} retry={refresh} />
       </div>
     );
@@ -111,7 +115,7 @@ export function ProjectDetailScreen({ id }: { id: string }) {
     );
   }
   return (
-    <div className="page-shell">
+    <div className="page-shell" lang={locale}>
       <ProjectViewTracker
         projectId={id}
         enabled={
@@ -126,37 +130,40 @@ export function ProjectDetailScreen({ id }: { id: string }) {
         }
       />
       <Link className="breadcrumb" href="/projects">
-        <ArrowLeft size={13} />К каталогу проектов
+        <ArrowLeft size={13} />
+        {copy('К каталогу проектов')}
       </Link>
       <div className="split">
         <div className="split-main">
           <div className="detail-top-tags">
-            <span className="tag">{categoryLabels[p.category] ?? p.category}</span>
+            <span className="tag">{localizedCategoryLabels(locale)[p.category] ?? p.category}</span>
             <StatusBadge status={p.status} />
             {p.demo && <DemoBadge />}
           </div>
-          <h1 className="detail-title">{p.title.replace(/^ДЕМО:\s*/i, '')}</h1>
+          <h1 className="detail-title" lang="und">
+            {p.title.replace(/^ДЕМО:\s*/i, '')}
+          </h1>
           <div className="detail-meta">
             <span>
               <MapPin size={15} />
-              {modeLabels[p.mode]}
+              {localizedModeLabels(locale)[p.mode]}
               {p.city ? ` · ${p.city}` : ''}
             </span>
             <span>
               <Clock3 size={15} />
-              {p.estimatedHours} ч. работы
+              {p.estimatedHours} {copy('ч. работы')}
             </span>
             <span>
-              <CalendarDays size={15} />
-              До {date(p.dueAt)}
+              <CalendarDays size={15} /> {copy('До')} {date(p.dueAt, false, locale)}
             </span>
           </div>
           {p.demo && (
             <div className="alert warning">
               <Info size={18} />
               <span>
-                Демонстрационный пример. Указанные бюджет, заказчик и условия не подтверждают
-                реальный заказ или партнёрство. Публичные отклики на закрытые примеры отключены.
+                {copy(
+                  'Демонстрационный пример. Указанные бюджет, заказчик и условия не подтверждают реальный заказ или партнёрство. Публичные отклики на закрытые примеры отключены.',
+                )}
               </span>
             </div>
           )}
@@ -166,78 +173,87 @@ export function ProjectDetailScreen({ id }: { id: string }) {
               <div className="alert warning">
                 <Info size={18} />
                 <span>
-                  <strong>Комментарий модератора: </strong>
-                  {p.moderationReason}
+                  <strong>{copy('Комментарий модератора:')}</strong>{' '}
+                  <span lang="und">{p.moderationReason}</span>
                 </span>
               </div>
             )}
           <section className="panel prose">
-            <h2>Задача</h2>
-            <p className="pre-wrap">{p.problem}</p>
-            <p className="pre-wrap">{p.description}</p>
-            <h2>Ожидаемый результат</h2>
-            <p className="pre-wrap">{p.deliverables}</p>
-            <h2>Критерии приёмки</h2>
-            <ol className="criteria-list">
+            <h2>{copy('Задача')}</h2>
+            <p className="pre-wrap" lang="und">
+              {p.problem}
+            </p>
+            <p className="pre-wrap" lang="und">
+              {p.description}
+            </p>
+            <h2>{copy('Ожидаемый результат')}</h2>
+            <p className="pre-wrap" lang="und">
+              {p.deliverables}
+            </p>
+            <h2>{copy('Критерии приёмки')}</h2>
+            <ol className="criteria-list" lang="und">
               {p.acceptanceCriteria.map((criterion, i) => (
                 <li key={i}>{criterion}</li>
               ))}
             </ol>
-            <h2>Что пригодится</h2>
+            <h2>{copy('Что пригодится')}</h2>
             <div className="tag-row">
               {p.skills.map((skill) => (
-                <span className="tag" key={skill}>
+                <span className="tag" key={skill} lang="und">
                   {skill}
                 </span>
               ))}
               {p.difficulty === 'beginner_friendly' && (
-                <span className="tag beginner">Можно без опыта</span>
+                <span className="tag beginner">{copy('Можно без опыта')}</span>
               )}
             </div>
-            <h2>Формат работы</h2>
+            <h2>{copy('Формат работы')}</h2>
             <dl className="definition-list">
               <div>
-                <dt>Формат и город</dt>
+                <dt>{copy('Формат и город')}</dt>
                 <dd>
-                  {modeLabels[p.mode]}
+                  {localizedModeLabels(locale)[p.mode]}
                   {p.city ? ` · ${p.city}` : ''}
                 </dd>
               </div>
               <div>
-                <dt>Предпочтительное время</dt>
-                <dd>{p.preferredTime || 'По согласованию'}</dd>
+                <dt>{copy('Предпочтительное время')}</dt>
+                <dd>{p.preferredTime || copy('По согласованию')}</dd>
               </div>
               <div>
-                <dt>Объём</dt>
-                <dd>{p.estimatedHours} часов</dd>
+                <dt>{copy('Объём')}</dt>
+                <dd>
+                  {p.estimatedHours} {copy('часов')}
+                </dd>
               </div>
               <div>
-                <dt>Расчёт</dt>
-                <dd>Фиксированный бюджет</dd>
+                <dt>{copy('Расчёт')}</dt>
+                <dd>{copy('Фиксированный бюджет')}</dd>
               </div>
             </dl>
           </section>
           {(owner || assigned) &&
             !['draft', 'pending_moderation', 'published', 'paused'].includes(p.status) && (
               <section className="panel">
-                <h2>Совместная работа</h2>
+                <h2>{copy('Совместная работа')}</h2>
                 <p className="muted">
-                  Условия, сдача результата и решения обеих сторон находятся в рабочей области.
+                  {copy(
+                    'Условия, сдача результата и решения обеих сторон находятся в рабочей области.',
+                  )}
                 </p>
                 <Link className="button" href={`/work/${id}`}>
-                  Открыть рабочую область
-                  <ArrowRight size={16} />
+                  {copy('Открыть рабочую область')} <ArrowRight size={16} />
                 </Link>
               </section>
             )}
           {owner && (
             <section className="panel">
-              <h2>Управление заказом</h2>
+              <h2>{copy('Управление заказом')}</h2>
               <div className="button-row">
                 {draft && (
                   <>
                     <Link className="button secondary" href={`/client/projects/${id}/edit`}>
-                      Редактировать черновик
+                      {copy('Редактировать черновик')}
                     </Link>
                     <button
                       className="button"
@@ -250,29 +266,29 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                         )
                       }
                     >
-                      Отправить на модерацию
+                      {copy('Отправить на модерацию')}
                     </button>
                   </>
                 )}
                 {p.status === 'published' && (
                   <>
                     <Link className="button" href={`/client/projects/${id}/applications`}>
-                      Посмотреть отклики
+                      {copy('Посмотреть отклики')}
                     </Link>
                     <Link className="button secondary" href={`/client/projects/${id}/edit`}>
-                      Изменить и отправить заново
+                      {copy('Изменить и отправить заново')}
                     </Link>
                   </>
                 )}
                 {p.status === 'pending_moderation' && (
                   <p className="muted">
-                    Заказ проверяет модератор. После решения вы получите уведомление.
+                    {copy('Заказ проверяет модератор. После решения вы получите уведомление.')}
                   </p>
                 )}
               </div>
               {['draft', 'pending_moderation', 'published', 'paused'].includes(p.status) && (
                 <details className="details-toggle">
-                  <summary>Приостановить или отменить объявление</summary>
+                  <summary>{copy('Приостановить или отменить объявление')}</summary>
                   <form
                     className="stack"
                     onSubmit={async (e) => {
@@ -288,20 +304,20 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                     }}
                   >
                     <label className="field">
-                      Действие
+                      {copy('Действие')}{' '}
                       <select name="operation" defaultValue="cancelProject">
-                        <option value="cancelProject">Отменить заказ</option>
+                        <option value="cancelProject">{copy('Отменить заказ')}</option>
                         {['published', 'pending_moderation'].includes(p.status) && (
-                          <option value="pauseProject">Приостановить объявление</option>
+                          <option value="pauseProject">{copy('Приостановить объявление')}</option>
                         )}
                       </select>
                     </label>
                     <label className="field">
-                      Причина
+                      {copy('Причина')}{' '}
                       <textarea name="reason" required minLength={10} maxLength={2000} />
                     </label>
                     <button className="button danger" disabled={action.busy}>
-                      Подтвердить изменение статуса
+                      {copy('Подтвердить изменение статуса')}
                     </button>
                   </form>
                 </details>
@@ -313,89 +329,94 @@ export function ProjectDetailScreen({ id }: { id: string }) {
         </div>
         <aside className="sticky-aside detail-aside">
           <section className="panel">
-            <span className="budget-label">Фиксированный бюджет</span>
-            <div className="detail-budget">{money(p.budgetKzt)}</div>
-            <p className="muted small-text">За весь согласованный результат</p>
+            <span className="budget-label">{copy('Фиксированный бюджет')}</span>
+            <div className="detail-budget">{money(p.budgetKzt, locale)}</div>
+            <p className="muted small-text">{copy('За весь согласованный результат')}</p>
             <dl className="definition-list">
               <div>
-                <dt>Время на задачу</dt>
-                <dd>{p.estimatedHours} часов</dd>
+                <dt>{copy('Время на задачу')}</dt>
+                <dd>
+                  {p.estimatedHours} {copy('часов')}
+                </dd>
               </div>
               <div>
-                <dt>Сдать до</dt>
-                <dd>{date(p.dueAt)}</dd>
+                <dt>{copy('Сдать до')}</dt>
+                <dd>{date(p.dueAt, false, locale)}</dd>
               </div>
               <div>
-                <dt>Уровень</dt>
+                <dt>{copy('Уровень')}</dt>
                 <dd>
                   {p.difficulty === 'beginner_friendly'
-                    ? 'Подходит для первого опыта'
-                    : 'Нужен базовый опыт'}
+                    ? copy('Подходит для первого опыта')
+                    : copy('Нужен базовый опыт')}
                 </dd>
               </div>
             </dl>
             {!viewer ? (
               <>
                 <Link className="button full" href="/auth/register">
-                  Откликнуться бесплатно
-                  <ArrowRight size={16} />
+                  {copy('Откликнуться бесплатно')} <ArrowRight size={16} />
                 </Link>
                 <p className="small-text muted" style={{ marginTop: 12, marginBottom: 0 }}>
-                  Войдите или создайте профиль исполнителя.
+                  {copy('Войдите или создайте профиль исполнителя.')}
                 </p>
               </>
             ) : !owner && !assigned && !viewer.roles.includes('student') ? (
               <Link className="button full" href="/onboarding">
-                Добавить роль исполнителя
+                {copy('Добавить роль исполнителя')}
               </Link>
             ) : null}
             {a && (
               <div style={{ marginBottom: 16 }}>
-                <p className="small-text muted">Ваш отклик</p>
+                <p className="small-text muted">{copy('Ваш отклик')}</p>
                 <StatusBadge status={a.status} />
               </div>
             )}
             {(data.canApply || canEditApplication) && (
               <form className="action-form stack" onSubmit={apply}>
                 <label className="field">
-                  {active ? 'Ваше сообщение' : 'Коротко о себе и подходе'}
+                  {active ? copy('Ваше сообщение') : copy('Коротко о себе и подходе')}
                   <textarea
                     name="message"
                     required
                     minLength={20}
                     maxLength={2000}
                     defaultValue={a?.message ?? ''}
-                    placeholder="Почему вам интересна задача и как вы её решите?"
+                    placeholder={copy('Почему вам интересна задача и как вы её решите?')}
                   />
                 </label>
                 {works.length > 0 && (
                   <div className="field">
-                    <span>Релевантные работы (необязательно)</span>
+                    <span>{copy('Релевантные работы (необязательно)')}</span>
                     {works.map((work) => (
                       <label className="check-label" key={work.id}>
                         <input type="checkbox" name="work" value={work.url} />
-                        <span>{work.title}</span>
+                        <span>
+                          <span lang="und">{work.title}</span>
+                        </span>
                       </label>
                     ))}
                   </div>
                 )}
                 <label className="field">
-                  Ссылки на работы (необязательно)
+                  {copy('Ссылки на работы (необязательно)')}{' '}
                   <textarea
                     name="links"
                     maxLength={2000}
                     defaultValue={a?.links.join('\n') ?? ''}
-                    placeholder="https://… — одна ссылка на строку"
+                    placeholder={copy('https://… — одна ссылка на строку')}
                     rows={2}
                   />
-                  <small>Не больше 5 ссылок. Первый заказ можно получить без портфолио.</small>
+                  <small>
+                    {copy('Не больше 5 ссылок. Первый заказ можно получить без портфолио.')}
+                  </small>
                 </label>
                 <button className="button full" type="submit" disabled={action.busy}>
                   {action.busy
-                    ? 'Сохраняем…'
+                    ? copy('Сохраняем…')
                     : active
-                      ? 'Обновить отклик'
-                      : 'Отправить отклик бесплатно'}
+                      ? copy('Обновить отклик')
+                      : copy('Отправить отклик бесплатно')}
                 </button>
                 {canEditApplication && (
                   <button
@@ -406,7 +427,7 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                       action.run('withdrawApplication', { applicationId: a!.id }, 'Отклик отозван')
                     }
                   >
-                    Отозвать отклик
+                    {copy('Отозвать отклик')}
                   </button>
                 )}
               </form>
@@ -416,21 +437,26 @@ export function ProjectDetailScreen({ id }: { id: string }) {
               !owner &&
               !assigned &&
               viewer?.roles.includes('student') &&
-              !a && <div className="alert warning">Отклики на этот заказ сейчас закрыты.</div>}
+              !a && (
+                <div className="alert warning">{copy('Отклики на этот заказ сейчас закрыты.')}</div>
+              )}
             {!owner && <ActionFeedback error={action.error} success={action.success} />}
             <div className="divider" />
             <p className="small-text muted" style={{ marginBottom: 0 }}>
-              Оплата проходит напрямую между участниками. Платформа не удерживает деньги и не
-              гарантирует выплату.
+              {copy(
+                'Оплата проходит напрямую между участниками. Платформа не удерживает деньги и не гарантирует выплату.',
+              )}
             </p>
           </section>
           <section className="panel">
             <div className="client-block">
               <span className="avatar">
-                {(p.client?.clientProfile?.name ?? p.client?.name ?? 'З').slice(0, 1)}
+                {(p.client?.clientProfile?.name ?? p.client?.name ?? copy('З')).slice(0, 1)}
               </span>
               <div>
-                <strong>{p.client?.clientProfile?.name ?? p.client?.name ?? 'Заказчик'}</strong>
+                <strong>
+                  {p.client?.clientProfile?.name ?? p.client?.name ?? copy('Заказчик')}
+                </strong>
                 <small>
                   {p.client?.clientProfile?.verificationStatus === 'verified' ? (
                     <>
@@ -438,10 +464,10 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                         size={12}
                         style={{ display: 'inline', verticalAlign: 'middle' }}
                       />{' '}
-                      Проверен модератором
+                      {copy('Проверен модератором')}{' '}
                     </>
                   ) : (
-                    'Проверка организации не завершена'
+                    copy('Проверка организации не завершена')
                   )}
                 </small>
               </div>

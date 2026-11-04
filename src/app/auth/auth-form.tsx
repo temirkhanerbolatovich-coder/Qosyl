@@ -3,7 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, CheckCircle2, Clock3, LockKeyhole } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, Eye, EyeOff, LockKeyhole } from 'lucide-react';
+import { useI18n } from '@/components/locale-provider';
+import {
+  authFeedbackText,
+  authMessage,
+  type AuthFeedback,
+  type AuthMessageKey,
+} from '@/lib/auth-feedback';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify';
 
@@ -35,30 +42,112 @@ const titles: Record<Mode, { title: string; description: string; submit: string 
   },
 };
 
+const kazakhTitles: typeof titles = {
+  login: {
+    title: 'Қайта қош келдіңіз',
+    description: 'Тапсырыстар мен портфолио бойынша жұмысыңызды жалғастырыңыз.',
+    submit: 'Кіру',
+  },
+  register: {
+    title: 'Алғашқы нақты жобаңыз',
+    description: 'Аккаунт жасап, орындаушы немесе тапсырыс беруші рөлін таңдаңыз.',
+    submit: 'Аккаунт жасау',
+  },
+  forgot: {
+    title: 'Қолжетімділікті қалпына келтіру',
+    description: 'Жаңа құпиясөз орнату үшін сілтеме жібереміз.',
+    submit: 'Сілтеме жіберу',
+  },
+  reset: {
+    title: 'Жаңа құпиясөз',
+    description: 'Құпиясөз өзгергеннен кейін барлық алдыңғы сессия аяқталады.',
+    submit: 'Құпиясөзді сақтау',
+  },
+  verify: {
+    title: 'Email мекенжайын растау',
+    description: 'Хаттағы сілтеме арқылы мекенжайды растаңыз. Қажет болса, жаңа хат сұраңыз.',
+    submit: 'Хатты қайта жіберу',
+  },
+};
+
 export function AuthForm({
   mode,
   localMode,
   token,
+  googleEnabled = false,
+  googleError = false,
 }: {
   mode: Mode;
   localMode: boolean;
   token?: string;
+  googleEnabled?: boolean;
+  googleError?: boolean;
 }) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const copy = titles[mode];
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [error, setError] = useState<AuthFeedback | null>(null);
+  const [success, setSuccess] = useState<AuthMessageKey | null>(null);
+  const copy = (locale === 'kk' ? kazakhTitles : titles)[mode];
+  const errorCopy = error ? authFeedbackText(error, locale) : null;
+  const emailFormLabel =
+    mode === 'register'
+      ? t('Регистрация по email', 'Email арқылы тіркелу')
+      : mode === 'login'
+        ? t('Вход по email', 'Email арқылы кіру')
+        : copy.title;
+
+  async function signInWithGoogle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch('/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          callbackURL: '/dashboard',
+          newUserCallbackURL: '/onboarding',
+          errorCallbackURL: '/auth/login?googleError=1',
+          requestSignUp: mode === 'register',
+          additionalData: {
+            adultConfirmed: form.get('adultConfirmed') === 'on',
+            privacyConsent: form.get('privacyConsent') === 'on',
+          },
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || typeof result?.url !== 'string') {
+        setError({ kind: 'response', status: response.status, message: result?.message });
+        return;
+      }
+      const destination = new URL(result.url);
+      if (destination.protocol !== 'https:' || destination.hostname !== 'accounts.google.com') {
+        setError({ kind: 'local', key: 'failed' });
+        return;
+      }
+      window.location.assign(destination.href);
+    } catch {
+      setError({ kind: 'local', key: 'offline' });
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    setError('');
-    setSuccess('');
+    setError(null);
+    setSuccess(null);
     const form = new FormData(event.currentTarget);
     const password = String(form.get('password') || '');
     if ((mode === 'register' || mode === 'reset') && password !== form.get('confirmPassword')) {
-      setError('Пароли не совпадают.');
+      setError({ kind: 'local', key: 'mismatch' });
       setPending(false);
       return;
     }
@@ -101,67 +190,81 @@ export function AuthForm({
       const result = await response.json().catch(() => null);
       if (!response.ok) {
         const message =
-          response.status === 429
-            ? 'Слишком много попыток. Подождите минуту и повторите.'
-            : response.status >= 500
-              ? 'Сервис временно недоступен. Попробуйте ещё раз позже.'
-              : result?.message ||
-                result?.error ||
-                'Не удалось выполнить действие. Проверьте введённые данные.';
-        setError(typeof message === 'string' ? message : 'Не удалось выполнить действие.');
+          typeof result?.message === 'string'
+            ? result.message
+            : typeof result?.error === 'string'
+              ? result.error
+              : undefined;
+        setError({
+          kind: 'response',
+          status: response.status,
+          code: typeof result?.code === 'string' ? result.code : undefined,
+          message,
+        });
         return;
       }
       if (mode === 'login' || (mode === 'register' && localMode)) {
         router.push(mode === 'register' ? '/onboarding' : '/dashboard');
         router.refresh();
       } else if (mode === 'register') {
-        setSuccess('Проверьте почту и подтвердите адрес. Затем войдите в аккаунт.');
+        setSuccess('confirmEmail');
       } else if (mode === 'reset') {
-        setSuccess('Пароль изменён. Войдите с новым паролем.');
+        setSuccess('passwordChanged');
       } else {
-        setSuccess(
-          'Если для этого адреса доступно действие, письмо отправлено. Проверьте входящие и спам.',
-        );
+        setSuccess('emailRequested');
       }
     } catch (caught) {
-      setError(
-        caught instanceof DOMException &&
+      setError({
+        kind: 'local',
+        key:
+          caught instanceof DOMException &&
           (caught.name === 'TimeoutError' || caught.name === 'AbortError')
-          ? 'Сервер не ответил вовремя. Проверьте соединение и повторите.'
-          : 'Нет связи с сервером. Проверьте соединение и повторите.',
-      );
+            ? 'timeout'
+            : 'offline',
+      });
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <div className="container page-shell">
+    <div className="container page-shell" lang={locale}>
       <div className="auth-layout">
         <section className="auth-story">
-          <span className="eyebrow">ОПЫТ НАЧИНАЕТСЯ С ДЕЛА</span>
+          <span className="eyebrow">{t('ОПЫТ НАЧИНАЕТСЯ С ДЕЛА', 'ТӘЖІРИБЕ ІСТЕН БАСТАЛАДЫ')}</span>
           <h1>
-            Небольшая задача.
+            {t('Небольшая задача.', 'Шағын тапсырма.')}
             <br />
-            Настоящий результат.
+            {t('Настоящий результат.', 'Нақты нәтиже.')}
           </h1>
           <p className="muted">
-            Найдите заказ по своим навыкам, согласуйте понятные условия и добавьте принятый
-            результат в портфолио.
+            {t(
+              'Найдите заказ по своим навыкам, согласуйте понятные условия и добавьте принятый результат в портфолио.',
+              'Дағдыларыңызға сай тапсырыс тауып, түсінікті шарттарды келісіңіз және қабылданған нәтижені портфолиоға қосыңыз.',
+            )}
           </p>
           <div className="auth-benefits">
             <p>
-              <CheckCircle2 size={20} aria-hidden="true" /> Бесплатные отклики без длинного резюме
+              <CheckCircle2 size={20} aria-hidden="true" />{' '}
+              {t('Бесплатные отклики без длинного резюме', 'Ұзақ түйіндемесіз тегін өтінімдер')}
             </p>
             <p>
-              <Clock3 size={20} aria-hidden="true" /> Бюджет и трудоёмкость до начала работы
+              <Clock3 size={20} aria-hidden="true" />{' '}
+              {t(
+                'Бюджет и трудоёмкость до начала работы',
+                'Бюджет пен жұмыс көлемі алдын ала белгілі',
+              )}
             </p>
             <p>
-              <LockKeyhole size={20} aria-hidden="true" /> Приёмка по согласованным критериям
+              <LockKeyhole size={20} aria-hidden="true" />{' '}
+              {t('Приёмка по согласованным критериям', 'Келісілген өлшемдер бойынша қабылдау')}
             </p>
           </div>
           <p className="muted">
-            Пилот для участников 18+. Оплата — вне платформы, по договорённости сторон.
+            {t(
+              'Пилот для участников 18+. Оплата — вне платформы, по договорённости сторон.',
+              'Пилот 18 жастан асқан қатысушыларға арналған. Төлем тараптардың келісімі бойынша платформадан тыс жүргізіледі.',
+            )}
           </p>
         </section>
         <section className="panel auth-panel" aria-labelledby="auth-heading">
@@ -169,35 +272,67 @@ export function AuthForm({
           <p className="muted">{copy.description}</p>
           {localMode && (
             <div className="alert">
-              Локальный режим разработки. Подтверждение почты отключено. Письма восстановления
-              сохраняются только в папке <code>.local/mail</code> на этом компьютере.
+              {t(
+                'Локальный режим разработки. Подтверждение почты отключено. Письма восстановления сохраняются только в папке',
+                'Жергілікті әзірлеу режимі. Поштаны растау өшірілген. Қалпына келтіру хаттары тек осы компьютердегі мына бумада сақталады:',
+              )}{' '}
+              <code>.local/mail</code>
+              {locale === 'ru' ? ' на этом компьютере.' : '.'}
             </div>
           )}
-          {error && (
+          {errorCopy && (
             <div className="alert error" role="alert">
-              {error}
+              {errorCopy.original && (
+                <span>
+                  {t(
+                    'Сообщение сервиса в исходном виде:',
+                    'Қызмет хабарламасының түпнұсқасы:',
+                  )}{' '}
+                </span>
+              )}
+              <span lang={errorCopy.language}>{errorCopy.text}</span>
+            </div>
+          )}
+          {googleError && (
+            <div className="alert error" role="alert">
+              {t(
+                'Не удалось войти через Google. Если вы ещё не регистрировались, сначала создайте аккаунт через Google. Если email уже занят, войдите привычным способом.',
+                'Google арқылы кіру мүмкін болмады. Алдымен Google арқылы тіркеліңіз. Егер email бұрын қолданылса, әдеттегі жолмен кіріңіз.',
+              )}
             </div>
           )}
           {success && (
             <div className="alert success" role="status">
-              {success} {mode === 'reset' && <Link href="/auth/login">Перейти ко входу</Link>}
+              {authMessage(success, locale)}{' '}
+              {mode === 'reset' && (
+                <Link href="/auth/login">{t('Перейти ко входу', 'Кіру бетіне өту')}</Link>
+              )}
               {mode === 'register' && !localMode && (
                 <p>
-                  <Link href="/auth/verify-email">Запросить письмо повторно</Link>
+                  <Link href="/auth/verify-email">
+                    {t('Запросить письмо повторно', 'Хатты қайта сұрау')}
+                  </Link>
                 </p>
               )}
             </div>
           )}
           {mode === 'reset' && !token ? (
             <div className="alert error" role="alert">
-              Ссылка недействительна или истекла.{' '}
-              <Link href="/auth/forgot-password">Запросить новую ссылку</Link>
+              {t('Ссылка недействительна или истекла.', 'Сілтеме жарамсыз немесе мерзімі өткен.')}{' '}
+              <Link href="/auth/forgot-password">
+                {t('Запросить новую ссылку', 'Жаңа сілтеме сұрау')}
+              </Link>
             </div>
           ) : (
-            <form onSubmit={submit} className="form-grid">
+            <form
+              onSubmit={submit}
+              className="form-grid"
+              aria-label={emailFormLabel}
+              aria-busy={pending}
+            >
               {mode === 'register' && (
                 <label className="field">
-                  Отображаемое имя
+                  {t('Отображаемое имя', 'Көрсетілетін есім')}
                   <input
                     className="input"
                     name="name"
@@ -205,7 +340,7 @@ export function AuthForm({
                     required
                     minLength={2}
                     maxLength={100}
-                    placeholder="Как к вам обращаться"
+                    placeholder={t('Как к вам обращаться', 'Сізді қалай атаймыз')}
                   />
                 </label>
               )}
@@ -224,64 +359,166 @@ export function AuthForm({
                 </label>
               )}
               {(mode === 'login' || mode === 'register' || mode === 'reset') && (
-                <label className="field">
-                  {mode === 'reset' ? 'Новый пароль' : 'Пароль'}
-                  <input
-                    className="input"
-                    type="password"
-                    name="password"
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    required
-                    minLength={mode === 'login' ? 1 : 12}
-                    maxLength={128}
-                    placeholder={mode === 'login' ? 'Ваш пароль' : 'Минимум 12 символов'}
-                  />
-                </label>
+                <div className="field">
+                  <label htmlFor="auth-password">
+                    {mode === 'reset'
+                      ? t('Новый пароль', 'Жаңа құпиясөз')
+                      : t('Пароль', 'Құпиясөз')}
+                  </label>
+                  <div className="password-field">
+                    <input
+                      id="auth-password"
+                      className="input"
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      required
+                      minLength={mode === 'login' ? 1 : 12}
+                      maxLength={128}
+                      placeholder={
+                        mode === 'login'
+                          ? t('Ваш пароль', 'Құпиясөзіңіз')
+                          : t('Минимум 12 символов', 'Кемінде 12 таңба')
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={
+                        showPassword
+                          ? t('Скрыть пароль', 'Құпиясөзді жасыру')
+                          : t('Показать пароль', 'Құпиясөзді көрсету')
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff size={19} aria-hidden="true" />
+                      ) : (
+                        <Eye size={19} aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               )}
               {(mode === 'register' || mode === 'reset') && (
-                <label className="field">
-                  Повторите пароль
-                  <input
-                    className="input"
-                    type="password"
-                    name="confirmPassword"
-                    autoComplete="new-password"
-                    required
-                    minLength={12}
-                    maxLength={128}
-                  />
-                </label>
+                <div className="field">
+                  <label htmlFor="auth-confirm-password">
+                    {t('Повторите пароль', 'Құпиясөзді қайталаңыз')}
+                  </label>
+                  <div className="password-field">
+                    <input
+                      id="auth-confirm-password"
+                      className="input"
+                      type={showConfirmation ? 'text' : 'password'}
+                      name="confirmPassword"
+                      autoComplete="new-password"
+                      required
+                      minLength={12}
+                      maxLength={128}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={
+                        showConfirmation
+                          ? t('Скрыть повтор пароля', 'Қайталанған құпиясөзді жасыру')
+                          : t('Показать повтор пароля', 'Қайталанған құпиясөзді көрсету')
+                      }
+                      aria-pressed={showConfirmation}
+                      onClick={() => setShowConfirmation(!showConfirmation)}
+                    >
+                      {showConfirmation ? (
+                        <EyeOff size={19} aria-hidden="true" />
+                      ) : (
+                        <Eye size={19} aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               )}
               {mode === 'register' && (
                 <>
                   <label className="check-row">
-                    <input type="checkbox" name="adultConfirmed" required /> Мне исполнилось 18 лет
+                    <input type="checkbox" name="adultConfirmed" required />{' '}
+                    {t('Мне исполнилось 18 лет', 'Мен 18 жасқа толдым')}
                   </label>
                   <label className="check-row">
                     <input type="checkbox" name="privacyConsent" required />{' '}
                     <span>
-                      Согласен с <Link href="/terms">условиями пилота</Link> и{' '}
-                      <Link href="/privacy">обработкой персональных данных</Link>
+                      {t('Согласен с ', '')}
+                      <Link href="/terms">{t('условиями пилота', 'Пилот шарттарымен')}</Link>{' '}
+                      {t('и', 'және')}{' '}
+                      <Link href="/privacy">
+                        {t('обработкой персональных данных', 'дербес деректерді өңдеумен')}
+                      </Link>
+                      {t('', ' келісемін')}
                     </span>
                   </label>
                 </>
               )}
               <button className="button" type="submit" disabled={pending}>
-                {pending ? 'Подождите…' : copy.submit}
+                {pending ? t('Подождите…', 'Күте тұрыңыз…') : copy.submit}
                 <ArrowRight size={17} aria-hidden="true" />
               </button>
             </form>
           )}
+          {googleEnabled && (mode === 'login' || mode === 'register') && (
+            <>
+              <p className="auth-method-divider">{t('Или через Google', 'Немесе Google арқылы')}</p>
+              <form
+                className="form-grid"
+                onSubmit={signInWithGoogle}
+                aria-label={
+                  mode === 'register'
+                    ? t('Регистрация через Google', 'Google арқылы тіркелу')
+                    : t('Вход через Google', 'Google арқылы кіру')
+                }
+                aria-busy={pending}
+              >
+                {mode === 'register' && (
+                  <>
+                    <label className="check-row">
+                      <input type="checkbox" name="adultConfirmed" required />{' '}
+                      {t('Мне исполнилось 18 лет', 'Мен 18 жасқа толдым')}
+                    </label>
+                    <label className="check-row">
+                      <input type="checkbox" name="privacyConsent" required />{' '}
+                      <span>
+                        {t('Согласен с ', '')}
+                        <Link href="/terms">{t('условиями пилота', 'Пилот шарттарымен')}</Link>{' '}
+                        {t('и', 'және')}{' '}
+                        <Link href="/privacy">
+                          {t('обработкой персональных данных', 'дербес деректерді өңдеумен')}
+                        </Link>
+                        {t('', ' келісемін')}
+                      </span>
+                    </label>
+                  </>
+                )}
+                <button className="button secondary" type="submit" disabled={pending}>
+                  {mode === 'login'
+                    ? t('Войти через Google', 'Google арқылы кіру')
+                    : t('Зарегистрироваться через Google', 'Google арқылы тіркелу')}
+                </button>
+              </form>
+            </>
+          )}
           <div className="auth-links">
             {mode === 'login' ? (
               <>
-                <Link href="/auth/forgot-password">Забыли пароль?</Link>
+                <Link href="/auth/forgot-password">
+                  {t('Забыли пароль?', 'Құпиясөзді ұмыттыңыз ба?')}
+                </Link>
                 <p>
-                  Ещё нет аккаунта? <Link href="/auth/register">Зарегистрироваться</Link>
+                  {t('Ещё нет аккаунта?', 'Аккаунтыңыз жоқ па?')}{' '}
+                  <Link href="/auth/register">{t('Зарегистрироваться', 'Тіркелу')}</Link>
                 </p>
               </>
             ) : (
-              <Link href="/auth/login">Уже есть аккаунт? Войти</Link>
+              <Link href="/auth/login">
+                {t('Уже есть аккаунт? Войти', 'Аккаунтыңыз бар ма? Кіру')}
+              </Link>
             )}
           </div>
         </section>

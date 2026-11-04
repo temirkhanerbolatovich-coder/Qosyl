@@ -1,5 +1,19 @@
 # Локальный контракт API Qosyl
 
+В self-profile добавлен optional hiddenFields: headline/city/education/bio/languages/skills. Запреты применяются сервером к гостевой странице и данным откликов заказчика. [Приватность, миграция и ограничения](../qa/profile-visibility-2026-10-29.md).
+
+Self-profile API принимает profileLinks с отдельным isPublic каждой ссылки. [Схема, лимиты, приватность и миграция](../qa/profile-links-2026-10-29.md).
+
+29.10.2026: self-profile API расширен необязательными studyYear, languages и experiences. Отсутствующие поля старых запросов сохраняются; null очищает курс, [] очищает список. Опыт имеет явный isPublic и тип employment/academic/volunteer/personal; закрытые записи не выдаются в публичной странице и API откликов заказчика. [Формат, лимиты и приёмка](../qa/profile-details-2026-10-29.md).
+
+Язык новых уведомлений: `/api/notification-language` GET возвращает `{data:{language:"ru"|"kk"}}` для текущего аккаунта, POST принимает только `{language:"ru"|"kk"}` и требует Origin, совпадающий с сайтом. Явного userId нет; существующие уведомления не переписываются. Ошибки имеют общий формат API; ответ `Cache-Control: private, no-store`. Миграция `20261028010000_notification_language` обязательна до запуска обновлённого приложения.
+
+F05: `/api/projects/{id}/attachments` GET metadata / POST raw binary, `/api/attachments/{id}` GET forced download / DELETE own unbound. Активные участники после взаимного согласования, без admin bypass; MIME/extension/stream5МиБ, rate/quota и hash-check, всегда unscanned. submitDeliverable принимает 1..5 HTTPS-ссылок/собственных attachmentIds вместе; старый link-only вызов совместим. Закрытые ссылки не публикуются в publicLinks. [Контракт и ограничения](../project-attachments.md), [приёмка](../qa/f05-marketplace-2026-10-27.md).
+
+Личные сохранения: `/api/opportunities/saved` GET/POST, схемы OpportunitySaved*. Все данные принадлежат текущему аккаунту, same-origin команды, до 100 избранных/20 поисков. [Подробности](../opportunity-saves.md).
+
+Продолжение F04: GET добавляет notificationFrequency/nextNotificationAt; POST setSearchNotifications принимает только own searchId и off/daily/weekly, 404 для чужого/отсутствующего ID. Частота по умолчанию off, повтор не переносит срок; [правила локальных уведомлений](../opportunity-search-notifications.md). Внешняя доставка не добавляется.
+
 Q24: `/api/admin/leads/threads` GET возвращает только локальный статус enabled/configured, POST принимает `{query}` и возвращает до 25 нормализованных кандидатов. Свежая роль admin, Origin, body cap 2048 байт, частотные ограничения и выключатель проверяются сервером. Это read-only preview; Lead/Project не создаются. 429 — локальная квота/пауза провайдера, 503 — отсутствие конфигурации/отказ/недоступность; токен и исходная ошибка провайдера закрыты. [Полный контракт и настройка](../threads-search.md), [QA](../qa/threads-search.md). Схемы запросов и ответов включены в OpenAPI.
 
 26.10.2026: текущий RPC-контракт содержит 30 команд и 10 разделов, включая `backgroundJobs` из Q11. Добавлен отдельный административный маршрут внутреннего сбора материалов. Определения метрик и изменение `views` приведены в [pilot-metrics.md](../pilot-metrics.md). Матрицы и карты схем генерируются по текущим реестрам; исторические отчёты предыдущих этапов сохраняют свои прежние количества.
@@ -40,6 +54,8 @@ npm test -- tests/api-contract.test.ts
 Лимит тела `/api/platform` — 65 536 байт, `/api/profile` — 16 384 байта, `/api/admin/content` — 32 768 байт; ограничивается поток, а не только заголовок Content-Length. Для каталога страница целая с 1, размер страницы 30, верхняя граница номера 10 000. Пустые фильтры пропускаются; перечисления, диапазоны, календарные даты и соотношение бюджетов проверяет сервер. `dueBefore=YYYY-MM-DD` означает конец дня в UTC+05.
 
 Refinement-проверки Zod не полностью выражаются JSON Schema: будущий срок задания, город для очной работы, HTTPS без встроенных реквизитов, согласованность связанных полей и прав доступа остаются серверными правилами. Генератор преобразует дату задания в строку `date-time`; пример с датой 2099 — синтетический запрос для документации, а не реальное предложение.
+
+Ссылки внешних работ профиля дополнительно отклоняют IP-адреса и локальные имена. DNS при проверке не разрешается, содержимое сервером не загружается; это не защита для будущих серверных запросов по URL. Сохранённые ранее ссылки не удаляются, но при следующем сохранении должны соответствовать актуальному правилу.
 
 В OpenAPI есть отдельные `ViewData_<view>`/`ViewResponse_<view>` для всех 10 разделов и `CommandData_<action>`/`CommandResponse_<action>` для всех 30 RPC-команд. `x-view-response` и `x-action-response` указывают точную схему по селектору. Для общих GET/POST используется `anyOf`: некоторые результаты совпадают, например dashboard и portfolio, либо `{ok:true}` у нескольких команд. Новое поле-дискриминатор в реальный ответ не добавляется.
 
@@ -88,3 +104,11 @@ Refinement-проверки Zod не полностью выражаются JSO
 Ошибки используют общий ApiError: 400 поля/адресат, 401 сессия, 403 роль/активность/Origin, 404 чужая/отсутствующая передача, 409 версия/состояние/срок/изменённый replay, 413 размер, 415 media type, 429 частота. [Подробный workflow и ограничения](../private-leads.md), [приёмка](../qa/private-leads.md). Прежние 30 RPC-команд и 10 видов чтения не расширялись этими приватными действиями.
 
 Общий поиск возможностей: GET /api/content/posts и GET /api/admin/content принимают q, category, geography, specialty и page. Публичный limit остаётся 1–6; административная страница — 20 материалов. HTML-источники и новые категории описаны в [инструкции](../opportunity-discovery.md); точные схемы и пределы — в openapi.json. Ответы сохраняют прежние envelopes и редакционные границы.
+
+## Аватар
+
+GET/POST/PATCH/DELETE /api/profile/avatar и GET /api/avatars/{userId} описаны в OpenAPI. POST — сырое тело image/jpeg или image/png до 2 МиБ; PATCH/DELETE требуют revision. [Доступ, ошибки и ограничения](../profile-avatar.md).
+
+## Самостоятельные кейсы
+
+GET/POST /api/profile/portfolio: строгие команды create/update/delete/reorder, собственные записи, revision, 32 КиБ и до 30 кейсов. Обновлён externalWorkSchema. Старый profile externalWorks больше не заменяет существующие строки; 409 предотвращает потерю новых полей. [Полный контракт](../portfolio-cases.md).

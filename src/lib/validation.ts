@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { recordPilotCostInput, voidPilotCostInput } from './pilot-cost-validation';
+import { isPrivateAttachmentLink } from './project-attachments';
 z.config(z.locales.ru());
 
 export const categories = [
@@ -70,7 +71,30 @@ export const mutationSchemas = {
   approveAgreement: projectId.extend({ agreementId: id }),
   proposeAgreement: projectFields.and(projectId),
   toggleMilestone: projectId.extend({ milestoneId: id }),
-  submitDeliverable: projectId.extend({ links: links.min(1), notes: text(10, 4000) }),
+  submitDeliverable: projectId
+    .extend({
+      links: links
+        .refine(
+          (values) => values.every((value) => !isPrivateAttachmentLink(value)),
+          'Закрытые файлы выберите в списке вложений, чтобы сохранить их в истории сдачи.',
+        )
+        .default([]),
+      attachmentIds: z.array(id).max(5).default([]),
+      notes: text(10, 4000),
+    })
+    .refine(
+      (value) =>
+        value.links.length + value.attachmentIds.length >= 1 &&
+        value.links.length + value.attachmentIds.length <= 5,
+      {
+        message: 'Добавьте от 1 до 5 результатов: HTTPS-ссылки или загруженные файлы.',
+        path: ['attachmentIds'],
+      },
+    )
+    .refine((value) => new Set(value.attachmentIds).size === value.attachmentIds.length, {
+      message: 'Не повторяйте файл в одной сдаче.',
+      path: ['attachmentIds'],
+    }),
   requestChanges: projectId.extend({
     submissionId: id,
     notes: reason,
@@ -88,7 +112,12 @@ export const mutationSchemas = {
     summary: text(10, 3000),
     role: text(2, 150),
     skills: z.array(text(1, 50)).max(15),
-    publicLinks: links.default([]),
+    publicLinks: links
+      .refine(
+        (values) => values.every((value) => !isPrivateAttachmentLink(value)),
+        'Закрытые вложения нельзя публиковать в портфолио.',
+      )
+      .default([]),
     visibility: z.enum(['private', 'public', 'redacted_public']),
   }),
   consentPortfolio: projectId.extend({ expectedUpdatedAt: z.string().datetime() }),

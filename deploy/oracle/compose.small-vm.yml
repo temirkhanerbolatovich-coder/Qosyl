@@ -1,0 +1,32 @@
+# Apply after compose.yml on the existing 1 GiB VM. Build images off-server.
+# Total resident limits leave memory for the host and TimScheduleBot.
+services:
+  db:
+    mem_limit: 160m
+    memswap_limit: 256m
+    cpus: 0.20
+    pids_limit: 100
+    restart: unless-stopped
+    command: [postgres, -c, shared_buffers=32MB, -c, max_connections=30, -c, work_mem=2MB, -c, maintenance_work_mem=32MB]
+  migrate:
+    mem_limit: 256m
+    memswap_limit: 512m
+    cpus: 0.50
+    pids_limit: 100
+  app:
+    mem_limit: 448m
+    memswap_limit: 1024m
+    cpus: 0.65
+    pids_limit: 160
+    restart: unless-stopped
+    environment:
+      NODE_OPTIONS: --max-old-space-size=128
+    healthcheck:
+      start_period: 180s
+      timeout: 15s
+  proxy:
+    mem_limit: 64m
+    memswap_limit: 128m
+    cpus: 0.10
+    pids_limit: 100
+    restart: unless-stopped

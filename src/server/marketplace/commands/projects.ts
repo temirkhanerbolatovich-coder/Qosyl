@@ -1,4 +1,6 @@
 import 'server-only';
+import { getNotificationLanguage } from '@/server/notification-language';
+import { notificationText } from '@/lib/notification-language';
 import type { User } from '@prisma/client';
 import type { Action } from '@/lib/validation';
 import { mutationSchemas } from '@/lib/validation';
@@ -74,7 +76,10 @@ export async function projectsCommands(
           await tx.notification.create({
             data: {
               userId: project.clientId,
-              text: `Модератор приостановил заказ: ${reason}`,
+              text: notificationText(
+                await getNotificationLanguage(tx, project.clientId),
+                `Модератор приостановил заказ: ${reason}`,
+              ),
               url: `/projects/${projectId}`,
             },
           });

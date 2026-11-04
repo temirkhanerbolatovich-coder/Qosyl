@@ -4,13 +4,9 @@ import { db } from '@/lib/db';
 import type { OpportunityQuery } from '@/lib/content-validation';
 import { specialtyTerms } from '@/lib/opportunity-search';
 
-/** Queue filters apply to the latest immutable revision, including unpublished materials. */
-export async function searchContentQueue(
-  query: OpportunityQuery,
-  status?: string,
-  publicOnly = false,
-  limit = 20,
-  database: Prisma.TransactionClient = db,
+/** Shared predicates expect the immutable content revision to use SQL alias r. */
+export function opportunityMatchClauses(
+  query: Pick<OpportunityQuery, 'q' | 'category' | 'geography' | 'specialty'>,
 ) {
   // Local PostgreSQL can use a C locale, whose lower() does not fold Cyrillic.
   const upper = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯӘҒҚҢӨҰҮҺІ';
@@ -28,6 +24,18 @@ export async function searchContentQueue(
     clauses.push(
       Prisma.sql`(${Prisma.join(specialtyTerms[query.specialty].map(includes), ' OR ')})`,
     );
+  return clauses;
+}
+
+/** Queue filters apply to the latest immutable revision, including unpublished materials. */
+export async function searchContentQueue(
+  query: OpportunityQuery,
+  status?: string,
+  publicOnly = false,
+  limit = 20,
+  database: Prisma.TransactionClient = db,
+) {
+  const clauses = opportunityMatchClauses(query);
   if (status) clauses.push(Prisma.sql`i."status" = ${status}`);
   if (publicOnly)
     clauses.push(

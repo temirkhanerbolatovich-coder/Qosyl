@@ -1,0 +1,92 @@
+name: Qosyl CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Code, build and browser checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Disposable service credentials only; never connect this workflow to production.
+      DATABASE_URL: postgresql://qosyl_ci:qosyl_ci_only@127.0.0.1:55432/student_marketplace
+      BETTER_AUTH_SECRET: qosyl-ci-synthetic-secret-never-use-in-production-2026
+      BETTER_AUTH_URL: http://localhost:3100
+      LOCAL_DEV_MODE: 'true'
+      DEMO_ENABLED: 'true'
+      THREADS_SEARCH_ENABLED: 'false'
+      THREADS_ACCESS_TOKEN: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: student_marketplace
+          POSTGRES_USER: qosyl_ci
+          POSTGRES_PASSWORD: qosyl_ci_only
+        ports:
+          - 127.0.0.1:55432:5432
+        options: >-
+          --health-cmd "pg_isready -U qosyl_ci -d student_marketplace"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out the reviewed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate the Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check the API contract
+        run: npm run api:check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Build the application
+        run: npm run build
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Install Chromium and its system dependencies
+        run: npx playwright install --with-deps chromium
+
+      # Both runners own port 3100 and their own fresh guarded database. Run sequentially.
+      - name: End-to-end workflows
+        run: npm run test:e2e
+
+      - name: UI accessibility and layout checks
+        run: npm run test:ui
+
+      # Reports/traces can contain synthetic session tokens and local mail links.
+      # Keep them on the disposable runner; do not upload .local or test-results.

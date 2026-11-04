@@ -1,0 +1,12 @@
+[Unit]
+Description=Qosyl PostgreSQL backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/qosyl-backup
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=300
+UMask=0077

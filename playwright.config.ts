@@ -19,10 +19,14 @@ process.env.DEMO_ENABLED = 'true';
 // Tests must never inherit the owner's live provider token or issue billable/external calls.
 process.env.THREADS_SEARCH_ENABLED = 'false';
 process.env.THREADS_ACCESS_TOKEN = '';
+// Google tests construct an authorization URL only; never use the owner's OAuth credentials.
+process.env.GOOGLE_CLIENT_ID = 'e2e-synthetic.apps.googleusercontent.com';
+process.env.GOOGLE_CLIENT_SECRET = 'e2e-synthetic-google-secret-no-callback';
 
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
+  forbidOnly: !!process.env.CI,
   workers: 1,
   timeout: 90_000,
   expect: { timeout: 15_000 },
