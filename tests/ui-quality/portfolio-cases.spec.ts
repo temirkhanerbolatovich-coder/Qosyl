@@ -24,7 +24,10 @@ test('case editor preserves tab and locale drafts and fits every viewport', asyn
   await page.getByRole('tab', { name: 'Профиль', exact: true }).click();
   await page.getByRole('tab', { name: 'Портфолио', exact: true }).click();
   await expect(form.locator('[name="title"]')).toHaveValue(title);
+  const menu = page.locator('button[aria-controls="header-navigation"]');
+  if (await menu.isVisible()) await menu.click();
   await page.getByRole('combobox', { name: 'Язык интерфейса' }).selectOption('kk');
+  if (await menu.isVisible()) await menu.click();
   await expect(form.locator('[name="title"]')).toHaveValue(title);
   await expect(form.getByRole('button', { name: 'Кейсті сақтау', exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);

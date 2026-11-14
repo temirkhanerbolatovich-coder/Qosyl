@@ -4,9 +4,11 @@ import { useI18n } from './locale-provider';
 export function ProfileSections({
   profile,
   portfolio,
+  resume,
 }: {
   profile: ReactNode;
   portfolio: ReactNode;
+  resume?: ReactNode;
 }) {
   const [tab, setTab] = useState(0);
   const { t } = useI18n();
@@ -17,7 +19,11 @@ export function ProfileSections({
         aria-label={t('Разделы профиля', 'Профиль бөлімдері')}
         className="inline-actions"
       >
-        {[t('Профиль', 'Профиль'), t('Портфолио', 'Портфолио')].map((name, index) => (
+        {[
+          t('Профиль', 'Профиль'),
+          t('Портфолио', 'Портфолио'),
+          ...(resume ? [t('Резюме', 'Түйіндеме')] : []),
+        ].map((name, index, tabs) => (
           <button
             key={index}
             id={`profile-tab-${index}`}
@@ -31,7 +37,12 @@ export function ProfileSections({
             onKeyDown={(event) => {
               if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
                 event.preventDefault();
-                const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : 1 - tab;
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? tabs.length - 1
+                      : (tab + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
                 setTab(next);
                 document.getElementById(`profile-tab-${next}`)?.focus();
               }
@@ -47,6 +58,16 @@ export function ProfileSections({
       <div id="profile-panel-1" role="tabpanel" aria-labelledby="profile-tab-1" hidden={tab !== 1}>
         {portfolio}
       </div>
+      {resume && (
+        <div
+          id="profile-panel-2"
+          role="tabpanel"
+          aria-labelledby="profile-tab-2"
+          hidden={tab !== 2}
+        >
+          {resume}
+        </div>
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { useI18n } from './locale-provider';
 import {
   caseFields,
@@ -92,6 +93,7 @@ export function PortfolioEditor({
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState<PortfolioCase[]>([]);
+  const router = useRouter();
   const [editing, setEditing] = useState<PortfolioCase | null>(null);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(false);
@@ -139,6 +141,7 @@ export function PortfolioEditor({
       const result = caseListResponse.parse(await response.json());
       setItems(result.data.items);
       setSaved(true);
+      router.refresh();
       if ((command as { action: string }).action !== 'reorder') {
         setOpen(false);
         setEditing(null);

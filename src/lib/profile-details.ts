@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-export const experienceKinds = ['employment', 'academic', 'volunteer', 'personal'] as const;
+export const experienceKinds = [
+  'employment',
+  'academic',
+  'volunteer',
+  'personal',
+  'internship',
+  'competition',
+] as const;
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const experienceSchema = z
   .strictObject({
@@ -36,4 +43,6 @@ export const experienceKindLabels = {
   academic: ['Учебный проект', 'Оқу жобасы'],
   volunteer: ['Волонтёрство', 'Еріктілік'],
   personal: ['Личный проект', 'Жеке жоба'],
+  internship: ['Стажировка или практика', 'Тағылымдама немесе тәжірибе'],
+  competition: ['Конкурс или хакатон', 'Байқау немесе хакатон'],
 } as const;

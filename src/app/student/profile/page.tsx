@@ -5,6 +5,9 @@ import { ProfileAvatarEditor } from '@/components/profile-avatar';
 import { ProfileSections } from '@/components/profile-sections';
 import { PortfolioEditor } from '@/components/portfolio-cases';
 import { db } from '@/lib/db';
+import { ResumeBuilder } from '@/components/resume-builder';
+import { readExperiences } from '@/lib/profile-details';
+import { readProfileLinks } from '@/lib/profile-links';
 
 export default async function ProfilePage() {
   const user = await requireUser();
@@ -75,6 +78,54 @@ export default async function ProfilePage() {
           ) : (
             <p>Сначала сохраните профиль исполнителя.</p>
           )
+        }
+        resume={
+          user.roles.includes('student') ? (
+            <ResumeBuilder
+              initial={{
+                name: user.name,
+                email: user.email,
+                headline: user.studentProfile?.headline ?? '',
+                city: user.studentProfile?.city ?? '',
+                education: [user.studentProfile?.institution, user.studentProfile?.discipline]
+                  .filter(Boolean)
+                  .join(' — '),
+                skills: (user.studentProfile?.skills ?? []).join(', '),
+                languages: (user.studentProfile?.languages ?? []).join(', '),
+                experience: readExperiences(user.studentProfile?.experiences)
+                  .map((item) =>
+                    [
+                      `${item.role} — ${item.organisation}`,
+                      [item.startMonth, item.endMonth].filter(Boolean).join(' — '),
+                      item.tasks,
+                      item.results,
+                    ]
+                      .filter(Boolean)
+                      .join('\n'),
+                  )
+                  .join('\n\n'),
+                projects: [
+                  ...user.externalWorks.map((work) =>
+                    [work.title, work.role, work.contribution || work.description, work.result]
+                      .filter(Boolean)
+                      .join('\n'),
+                  ),
+                  ...confirmed
+                    .filter(
+                      (work) =>
+                        !work.project.demo &&
+                        work.visibility !== 'private' &&
+                        work.clientConsentAt &&
+                        work.studentConsentAt,
+                    )
+                    .map((work) => work.title),
+                ].join('\n\n'),
+                links: readProfileLinks(user.studentProfile?.profileLinks)
+                  .map((link) => link.url)
+                  .join('\n'),
+              }}
+            />
+          ) : undefined
         }
       />
     </div>
