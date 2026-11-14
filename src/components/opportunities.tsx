@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import type { OpportunityFacets, PublicContentPost } from '@/contracts/content-intake';
@@ -22,6 +22,8 @@ import {
 } from '@/lib/localized-opportunity-labels';
 import { date } from '@/lib/labels';
 import { useI18n } from './locale-provider';
+import { useToast } from './toast-provider';
+import { EmptyNote, LoadingNote } from './state-note';
 import {
   normalizeOpportunityFilters,
   opportunitySearchUrl,
@@ -31,6 +33,7 @@ import { useOpportunitySaved } from './opportunity-saved-state';
 import { OpportunityConditions } from './opportunity-conditions';
 import {
   OpportunityFavoriteButton,
+  FollowOpportunitySearch,
   OpportunitySavedFeedback,
   SaveOpportunitySearch,
 } from './opportunity-saved-controls';
@@ -65,6 +68,7 @@ export function Opportunities({
   const conditionLabels = localizedOpportunityConditionLabels(locale);
   const saved = useOpportunitySaved(catalogue);
   const router = useRouter();
+  const toast = useToast();
   const [error, setError] = useState<'' | 'unavailable' | 'filters'>('');
   const [posts, setPosts] = useState<PublicContentPost[]>([]);
   const [total, setTotal] = useState(0);
@@ -201,333 +205,397 @@ export function Opportunities({
             'Редактор тексерген сыртқы іс-шараларға сілтемелер. Қатысу шарттарын ұйымдастырушыдан нақтылаңыз.',
           )}
         </p>
-        {catalogue ? (
-          <OpportunityFilters
-            collapseOnMobile
-            facets={facets}
-            initialWindows={{ added, deadline, hours, noExperience }}
-            initialFilters={appliedFilters}
-            onSearch={(value) => {
-              let nextUrl: string;
-              try {
-                const fields = Object.fromEntries(new URLSearchParams(value));
-                const windows = {
-                  added: opportunityWindow.safeParse(fields.added).data,
-                  deadline: opportunityWindow.safeParse(fields.deadline).data,
-                  hours: opportunityHours.safeParse(fields.hours).data,
-                  noExperience: fields.noExperience === 'true' ? ('true' as const) : undefined,
-                };
-                for (const key of ['added', 'deadline', 'hours', 'noExperience'])
-                  delete fields[key];
-                const filters = normalizeOpportunityFilters(fields);
-                nextUrl = opportunitySearchUrl(filters, { ...view, ...windows });
-              } catch {
-                setError('filters');
-                setLoading(false);
-                return;
-              }
-              if (nextUrl === returnTo) {
-                setLoading(true);
-                setError('');
-                setRetry((previous) => previous + 1);
-                router.replace(nextUrl, { scroll: false });
-              } else {
-                router.push(nextUrl, { scroll: false });
-              }
-            }}
-          />
-        ) : (
-          <Link className="text-link" href="/opportunities">
-            {t('Все возможности и поиск →', 'Барлық мүмкіндік және іздеу →')}
-          </Link>
-        )}
-        {catalogue && (
-          <OpportunityQuickFilters filters={appliedFilters} view={view} facets={facets} />
-        )}
-        {catalogue && (query || windowLabels.length > 0) && (
-          <div className="opportunity-applied-filters">
-            <p className="small-text" id="applied-opportunity-filters">
-              {t('Применённые фильтры', 'Қолданылған сүзгілер')}
-            </p>
-            <ul role="list" className="button-row" aria-labelledby="applied-opportunity-filters">
-              {Object.entries(filterLabels).map(([key, label]) => {
-                if (!label) return null;
-                const remaining = { ...appliedFilters };
-                delete remaining[key as keyof SavedOpportunityFilters];
-                return (
-                  <li key={key}>
+        <CatalogueLayout catalogue={catalogue}>
+          <CatalogueAside catalogue={catalogue}>
+            {catalogue ? (
+              <OpportunityFilters
+                collapseOnMobile
+                facets={facets}
+                initialWindows={{ added, deadline, hours, noExperience }}
+                initialFilters={appliedFilters}
+                onSearch={(value) => {
+                  let nextUrl: string;
+                  try {
+                    const fields = Object.fromEntries(new URLSearchParams(value));
+                    const windows = {
+                      added: opportunityWindow.safeParse(fields.added).data,
+                      deadline: opportunityWindow.safeParse(fields.deadline).data,
+                      hours: opportunityHours.safeParse(fields.hours).data,
+                      noExperience: fields.noExperience === 'true' ? ('true' as const) : undefined,
+                    };
+                    for (const key of ['added', 'deadline', 'hours', 'noExperience'])
+                      delete fields[key];
+                    const filters = normalizeOpportunityFilters(fields);
+                    nextUrl = opportunitySearchUrl(filters, { ...view, ...windows });
+                  } catch {
+                    setError('filters');
+                    setLoading(false);
+                    return;
+                  }
+                  // "Reset" clears every condition at once, so it can be taken back.
+                  if (value === '' && (query || windowLabels.length > 0))
+                    toast.show({
+                      text: t('Фильтры сброшены.', 'Сүзгілер тазартылды.'),
+                      actionLabel: t('Отменить', 'Болдырмау'),
+                      onAction: () => router.push(returnTo, { scroll: false }),
+                    });
+                  if (nextUrl === returnTo) {
+                    setLoading(true);
+                    setError('');
+                    setRetry((previous) => previous + 1);
+                    router.replace(nextUrl, { scroll: false });
+                  } else {
+                    router.push(nextUrl, { scroll: false });
+                  }
+                }}
+              />
+            ) : (
+              <Link className="text-link" href="/opportunities">
+                {t('Все возможности и поиск →', 'Барлық мүмкіндік және іздеу →')}
+              </Link>
+            )}
+            {catalogue &&
+              (saved.signedIn ? (
+                <>
+                  <OpportunitySavedFeedback saved={saved} />
+                  {saved.loading && (
+                    <LoadingNote>
+                      {t('Загрузка избранного и поисков…', 'Таңдаулылар мен іздеулер жүктелуде…')}
+                    </LoadingNote>
+                  )}
+                  <SaveOpportunitySearch saved={saved} filters={appliedFilters} />
+                </>
+              ) : (
+                <p>
+                  <Link className="text-link" href="/auth/login">
+                    {t(
+                      'Войдите, чтобы сохранять возможности и поиски',
+                      'Мүмкіндіктер мен іздеулерді сақтау үшін кіріңіз',
+                    )}
+                  </Link>
+                </p>
+              ))}
+          </CatalogueAside>
+          <CatalogueMain catalogue={catalogue}>
+            {catalogue && (
+              <OpportunityQuickFilters filters={appliedFilters} view={view} facets={facets} />
+            )}
+            {catalogue && (query || windowLabels.length > 0) && (
+              <div className="opportunity-applied-filters">
+                <p className="small-text" id="applied-opportunity-filters">
+                  {t('Применённые фильтры', 'Қолданылған сүзгілер')}
+                </p>
+                <ul
+                  role="list"
+                  className="button-row"
+                  aria-labelledby="applied-opportunity-filters"
+                >
+                  {Object.entries(filterLabels).map(([key, label]) => {
+                    if (!label) return null;
+                    const remaining = { ...appliedFilters };
+                    delete remaining[key as keyof SavedOpportunityFilters];
+                    return (
+                      <li key={key}>
+                        <Link
+                          className="button secondary small"
+                          href={opportunitySearchUrl(remaining, view)}
+                          scroll={false}
+                          aria-label={t(`Снять фильтр: ${label}`, `Сүзгіні алып тастау: ${label}`)}
+                        >
+                          <span>{label}</span>
+                          <X size={16} aria-hidden="true" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                  {windowLabels.map(({ key, label }) => (
+                    <li key={key}>
+                      <Link
+                        className="button secondary small"
+                        href={opportunitySearchUrl(appliedFilters, { ...view, [key]: undefined })}
+                        scroll={false}
+                        aria-label={t(`Снять фильтр: ${label}`, `Сүзгіні алып тастау: ${label}`)}
+                      >
+                        <span>{label}</span>
+                        <X size={16} aria-hidden="true" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {catalogue && initialError && (
+              <p className="alert" role="status">
+                {t(
+                  initialError,
+                  'Сілтемедегі сүзгілер дұрыс емес. Барлық мүмкіндік көрсетілді; іздеу шарттарын қайта енгізіңіз.',
+                )}
+              </p>
+            )}
+            {catalogue && (
+              <div className="opportunity-results-bar">
+                <h2 id={resultsAnchor} tabIndex={-1} ref={resultsHeading}>
+                  {t('Результаты поиска', 'Іздеу нәтижелері')}
+                </h2>
+                {saved.signedIn && query && (
+                  <FollowOpportunitySearch filters={appliedFilters} saved={saved} />
+                )}
+                <label className="field opportunity-sort">
+                  {t('Сортировка', 'Сұрыптау')}
+                  <select
+                    value={sort}
+                    onChange={(event) => {
+                      const selected = opportunitySort.parse(event.currentTarget.value);
+                      router.push(
+                        `${opportunitySearchUrl(appliedFilters, { ...view, sort: selected })}#${resultsAnchor}`,
+                        { scroll: false },
+                      );
+                    }}
+                  >
+                    <option value="newest">{t('Сначала новые', 'Алдымен жаңалары')}</option>
+                    {appliedFilters.q && (
+                      <option value="relevance">{t('По соответствию', 'Сәйкестік бойынша')}</option>
+                    )}
+                    <option value="deadline">
+                      {t('Ближайший срок подачи', 'Өтінім берудің ең жақын мерзімі')}
+                    </option>
+                  </select>
+                </label>
+              </div>
+            )}
+            {loading && (
+              <LoadingNote>{t('Ищем возможности…', 'Мүмкіндіктер ізделуде…')}</LoadingNote>
+            )}
+            {catalogue && !loading && !error && (
+              <p role="status" className="muted">
+                {t(`Найдено: ${total}`, `Табылды: ${total}`)}
+              </p>
+            )}
+            {!loading && error && (
+              <div className="alert error" role="alert">
+                <div>
+                  <p>
+                    {error === 'filters'
+                      ? t(
+                          'Проверьте условия поиска и повторите попытку.',
+                          'Іздеу шарттарын тексеріп, қайталап көріңіз.',
+                        )
+                      : t(
+                          'Не удалось загрузить возможности. Повторите позже.',
+                          'Мүмкіндіктерді жүктеу мүмкін болмады. Кейінірек қайталап көріңіз.',
+                        )}
+                  </p>
+                  <button
+                    className="button secondary"
+                    onClick={() => {
+                      setLoading(true);
+                      setError('');
+                      setRetry((previous) => previous + 1);
+                    }}
+                  >
+                    {t('Повторить загрузку', 'Қайта жүктеу')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {!catalogue && !loading && !error && !posts.length && (
+              <EmptyNote live>
+                {t('Сейчас нет актуальных публикаций.', 'Қазір өзекті жарияланымдар жоқ.')}
+              </EmptyNote>
+            )}
+            {catalogue && !loading && !error && !posts.length && (
+              <EmptyNote>
+                {page > lastPage
+                  ? t('На этой странице больше нет результатов.', 'Бұл бетте нәтиже қалмады.')
+                  : query
+                    ? t(
+                        'По этим условиям ничего не найдено. Попробуйте снять один из фильтров.',
+                        'Бұл шарттарға сәйкес нәтиже табылмады. Бір сүзгіні алып тастап көріңіз.',
+                      )
+                    : t('Сейчас нет актуальных публикаций.', 'Қазір өзекті жарияланымдар жоқ.')}
+              </EmptyNote>
+            )}
+            {catalogue &&
+              !loading &&
+              !error &&
+              total === 0 &&
+              (query || windowLabels.length > 0) && (
+                <ul
+                  role="list"
+                  className="stack opportunity-relaxed-filters"
+                  aria-label={t('Что можно изменить', 'Нені өзгертуге болады')}
+                >
+                  {[
+                    ...Object.entries(filterLabels).map(([key, label]) => {
+                      const remaining = { ...appliedFilters };
+                      delete remaining[key as keyof SavedOpportunityFilters];
+                      return { key, label, href: opportunitySearchUrl(remaining, view) };
+                    }),
+                    ...windowLabels.map(({ key, label }) => ({
+                      key,
+                      label,
+                      href: opportunitySearchUrl(appliedFilters, { ...view, [key]: undefined }),
+                    })),
+                  ].flatMap(({ key, label, href }) => {
+                    const found = facets?.relaxed[key];
+                    if (!label || !found) return [];
+                    return (
+                      <li key={key}>
+                        <Link className="button secondary" href={href} scroll={false}>
+                          {t(
+                            `Снять «${label}» · найдётся: ${found}`,
+                            `«${label}» алып тастау · табылады: ${found}`,
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            <div
+              className={`${catalogue ? 'opportunity-list' : 'projects-grid'}${
+                loading && posts.length > 0 ? ' is-updating' : ''
+              }`}
+              aria-busy={loading}
+            >
+              {posts.map((post) => (
+                <article className="panel stack opportunity-card" key={post.id}>
+                  <span className="muted small-text">
+                    {opportunityCategoryLabels[post.category]} ·{' '}
+                    <span lang={opportunityContentLanguage(post.language)}>{post.sourceName}</span>
+                  </span>
+                  <h3 lang={opportunityContentLanguage(post.language)}>{post.title}</h3>
+                  {/* An unknown publication date is only explained on the detail page. */}
+                  {post.publishedAt && (
+                    <p className="muted small-text">
+                      {t(
+                        `Опубликовано ${date(post.publishedAt, false, locale)}`,
+                        `Жарияланған күні: ${date(post.publishedAt, false, locale)}`,
+                      )}
+                    </p>
+                  )}
+                  <p
+                    className="opportunity-summary"
+                    lang={opportunityContentLanguage(post.language)}
+                  >
+                    {post.summary}
+                  </p>
+                  {post.geography && (
+                    <p className="small-text" lang={opportunityContentLanguage(post.language)}>
+                      {post.geography}
+                    </p>
+                  )}
+                  <OpportunityConditions post={post} compact />
+                  <p className="small-text">
+                    {post.deadline
+                      ? t(
+                          `Приём заявок до ${date(post.deadline, true, locale)}`,
+                          `Өтінім қабылдау мерзімі: ${date(post.deadline, true, locale)}`,
+                        )
+                      : t(
+                          'Срок подачи уточняйте у организатора.',
+                          'Өтінім беру мерзімін ұйымдастырушыдан нақтылаңыз.',
+                        )}
+                  </p>
+                  {post.eventDate && (
+                    <p className="small-text">
+                      {t('Событие:', 'Іс-шара:')} {date(post.eventDate, true, locale)}
+                    </p>
+                  )}
+                  <div className="opportunity-card-actions">
                     <Link
                       className="button secondary small"
-                      href={opportunitySearchUrl(remaining, view)}
-                      scroll={false}
-                      aria-label={t(`Снять фильтр: ${label}`, `Сүзгіні алып тастау: ${label}`)}
-                    >
-                      <span>{label}</span>
-                      <X size={16} aria-hidden="true" />
-                    </Link>
-                  </li>
-                );
-              })}
-              {windowLabels.map(({ key, label }) => (
-                <li key={key}>
-                  <Link
-                    className="button secondary small"
-                    href={opportunitySearchUrl(appliedFilters, { ...view, [key]: undefined })}
-                    scroll={false}
-                    aria-label={t(`Снять фильтр: ${label}`, `Сүзгіні алып тастау: ${label}`)}
-                  >
-                    <span>{label}</span>
-                    <X size={16} aria-hidden="true" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {catalogue && initialError && (
-          <p className="alert" role="status">
-            {t(
-              initialError,
-              'Сілтемедегі сүзгілер дұрыс емес. Барлық мүмкіндік көрсетілді; іздеу шарттарын қайта енгізіңіз.',
-            )}
-          </p>
-        )}
-        {catalogue &&
-          (saved.signedIn ? (
-            <>
-              <OpportunitySavedFeedback saved={saved} />
-              {saved.loading && (
-                <p role="status">
-                  {t('Загрузка избранного и поисков…', 'Таңдаулылар мен іздеулер жүктелуде…')}
-                </p>
-              )}
-              <SaveOpportunitySearch saved={saved} filters={appliedFilters} />
-            </>
-          ) : (
-            <p>
-              <Link className="text-link" href="/auth/login">
-                {t(
-                  'Войдите, чтобы сохранять возможности и поиски',
-                  'Мүмкіндіктер мен іздеулерді сақтау үшін кіріңіз',
-                )}
-              </Link>
-            </p>
-          ))}
-        {catalogue && (
-          <div className="opportunity-results-bar">
-            <h2 id={resultsAnchor} tabIndex={-1} ref={resultsHeading}>
-              {t('Результаты поиска', 'Іздеу нәтижелері')}
-            </h2>
-            <label className="field opportunity-sort">
-              {t('Сортировка', 'Сұрыптау')}
-              <select
-                value={sort}
-                onChange={(event) => {
-                  const selected = opportunitySort.parse(event.currentTarget.value);
-                  router.push(
-                    `${opportunitySearchUrl(appliedFilters, { ...view, sort: selected })}#${resultsAnchor}`,
-                    { scroll: false },
-                  );
-                }}
-              >
-                <option value="newest">{t('Сначала новые', 'Алдымен жаңалары')}</option>
-                {appliedFilters.q && (
-                  <option value="relevance">{t('По соответствию', 'Сәйкестік бойынша')}</option>
-                )}
-                <option value="deadline">
-                  {t('Ближайший срок подачи', 'Өтінім берудің ең жақын мерзімі')}
-                </option>
-              </select>
-            </label>
-          </div>
-        )}
-        {loading && <p role="status">{t('Ищем возможности…', 'Мүмкіндіктер ізделуде…')}</p>}
-        {catalogue && !loading && !error && (
-          <p role="status" className="muted">
-            {t(`Найдено: ${total}`, `Табылды: ${total}`)}
-          </p>
-        )}
-        {!loading && error && (
-          <div className="alert error" role="alert">
-            <div>
-              <p>
-                {error === 'filters'
-                  ? t(
-                      'Проверьте условия поиска и повторите попытку.',
-                      'Іздеу шарттарын тексеріп, қайталап көріңіз.',
-                    )
-                  : t(
-                      'Не удалось загрузить возможности. Повторите позже.',
-                      'Мүмкіндіктерді жүктеу мүмкін болмады. Кейінірек қайталап көріңіз.',
-                    )}
-              </p>
-              <button
-                className="button secondary"
-                onClick={() => {
-                  setLoading(true);
-                  setError('');
-                  setRetry((previous) => previous + 1);
-                }}
-              >
-                {t('Повторить загрузку', 'Қайта жүктеу')}
-              </button>
-            </div>
-          </div>
-        )}
-        {!catalogue && !loading && !error && !posts.length && (
-          <p role="status">
-            {t('Сейчас нет актуальных публикаций.', 'Қазір өзекті жарияланымдар жоқ.')}
-          </p>
-        )}
-        {catalogue && !loading && !error && !posts.length && (
-          <p>
-            {page > lastPage
-              ? t('На этой странице больше нет результатов.', 'Бұл бетте нәтиже қалмады.')
-              : query
-                ? t(
-                    'По этим условиям ничего не найдено. Попробуйте снять один из фильтров.',
-                    'Бұл шарттарға сәйкес нәтиже табылмады. Бір сүзгіні алып тастап көріңіз.',
-                  )
-                : t('Сейчас нет актуальных публикаций.', 'Қазір өзекті жарияланымдар жоқ.')}
-          </p>
-        )}
-        {catalogue && !loading && !error && total === 0 && (query || windowLabels.length > 0) && (
-          <ul
-            role="list"
-            className="stack opportunity-relaxed-filters"
-            aria-label={t('Что можно изменить', 'Нені өзгертуге болады')}
-          >
-            {[
-              ...Object.entries(filterLabels).map(([key, label]) => {
-                const remaining = { ...appliedFilters };
-                delete remaining[key as keyof SavedOpportunityFilters];
-                return { key, label, href: opportunitySearchUrl(remaining, view) };
-              }),
-              ...windowLabels.map(({ key, label }) => ({
-                key,
-                label,
-                href: opportunitySearchUrl(appliedFilters, { ...view, [key]: undefined }),
-              })),
-            ].flatMap(({ key, label, href }) => {
-              const found = facets?.relaxed[key];
-              if (!label || !found) return [];
-              return (
-                <li key={key}>
-                  <Link className="button secondary" href={href} scroll={false}>
-                    {t(
-                      `Снять «${label}» · найдётся: ${found}`,
-                      `«${label}» алып тастау · табылады: ${found}`,
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className={catalogue ? 'opportunity-list' : 'projects-grid'}>
-          {posts.map((post) => (
-            <article className="panel stack opportunity-card" key={post.id}>
-              <span className="muted small-text">
-                {opportunityCategoryLabels[post.category]} ·{' '}
-                <span lang={opportunityContentLanguage(post.language)}>{post.sourceName}</span>
-              </span>
-              <h3 lang={opportunityContentLanguage(post.language)}>{post.title}</h3>
-              {/* An unknown publication date is only explained on the detail page. */}
-              {post.publishedAt && (
-                <p className="muted small-text">
-                  {t(
-                    `Опубликовано ${date(post.publishedAt, false, locale)}`,
-                    `Жарияланған күні: ${date(post.publishedAt, false, locale)}`,
-                  )}
-                </p>
-              )}
-              <p lang={opportunityContentLanguage(post.language)}>{post.summary}</p>
-              {post.geography && (
-                <p className="small-text" lang={opportunityContentLanguage(post.language)}>
-                  {post.geography}
-                </p>
-              )}
-              <OpportunityConditions post={post} compact />
-              <p className="small-text">
-                {post.deadline
-                  ? t(
-                      `Приём заявок до ${date(post.deadline, true, locale)}`,
-                      `Өтінім қабылдау мерзімі: ${date(post.deadline, true, locale)}`,
-                    )
-                  : t(
-                      'Срок подачи уточняйте у организатора.',
-                      'Өтінім беру мерзімін ұйымдастырушыдан нақтылаңыз.',
-                    )}
-              </p>
-              {post.eventDate && (
-                <p className="small-text">
-                  {t('Событие:', 'Іс-шара:')} {date(post.eventDate, true, locale)}
-                </p>
-              )}
-              <Link
-                className="button secondary"
-                id={catalogue ? `opportunity-${encodeURIComponent(post.id)}` : undefined}
-                href={`/opportunities/${encodeURIComponent(post.id)}?from=${encodeURIComponent(returnTo)}`}
-                onNavigate={
-                  catalogue
-                    ? () => {
-                        restoredFocus.current = false;
-                        window.history.replaceState(
-                          window.history.state,
-                          '',
-                          `${window.location.pathname}${window.location.search}#opportunity-${encodeURIComponent(post.id)}`,
-                        );
+                      id={catalogue ? `opportunity-${encodeURIComponent(post.id)}` : undefined}
+                      href={`/opportunities/${encodeURIComponent(post.id)}?from=${encodeURIComponent(returnTo)}`}
+                      onNavigate={
+                        catalogue
+                          ? () => {
+                              restoredFocus.current = false;
+                              window.history.replaceState(
+                                window.history.state,
+                                '',
+                                `${window.location.pathname}${window.location.search}#opportunity-${encodeURIComponent(post.id)}`,
+                              );
+                            }
+                          : undefined
                       }
-                    : undefined
-                }
-              >
-                {t('Подробнее', 'Толығырақ')}
-              </Link>
-              <a className="text-link" href={post.url} target="_blank" rel="noopener noreferrer">
-                {t('К организатору →', 'Ұйымдастырушыға өту →')}
-              </a>
-              {catalogue && saved.signedIn && (
-                <OpportunityFavoriteButton itemId={post.id} saved={saved} />
-              )}
-            </article>
-          ))}
-        </div>
-        {catalogue && (
-          <div className="button-row">
-            <button
-              className="button secondary"
-              disabled={loading || page <= 1}
-              onClick={() =>
-                router.push(
-                  opportunitySearchUrl(appliedFilters, {
-                    ...view,
-                    page: error ? page - 1 : Math.min(page - 1, lastPage),
-                  }) + `#${resultsAnchor}`,
-                  { scroll: false },
-                )
-              }
-            >
-              {t('Назад', 'Артқа')}
-            </button>
-            <span>
-              {t('Страница', 'Бет')} {page}
-            </span>
-            <button
-              className="button secondary"
-              disabled={loading || Boolean(error) || page >= lastPage}
-              onClick={() =>
-                router.push(
-                  opportunitySearchUrl(appliedFilters, { ...view, page: page + 1 }) +
-                    `#${resultsAnchor}`,
-                  { scroll: false },
-                )
-              }
-            >
-              {t('Далее', 'Келесі')}
-            </button>
-          </div>
-        )}
+                    >
+                      {t('Подробнее', 'Толығырақ')}
+                    </Link>
+                    <a
+                      className="text-link"
+                      href={post.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t('К организатору →', 'Ұйымдастырушыға өту →')}
+                    </a>
+                    {catalogue && saved.signedIn && (
+                      <OpportunityFavoriteButton itemId={post.id} saved={saved} compact />
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+            {catalogue && (
+              <div className="button-row">
+                <button
+                  className="button secondary"
+                  disabled={loading || page <= 1}
+                  onClick={() =>
+                    router.push(
+                      opportunitySearchUrl(appliedFilters, {
+                        ...view,
+                        page: error ? page - 1 : Math.min(page - 1, lastPage),
+                      }) + `#${resultsAnchor}`,
+                      { scroll: false },
+                    )
+                  }
+                >
+                  {t('Назад', 'Артқа')}
+                </button>
+                <span>
+                  {t('Страница', 'Бет')} {page}
+                </span>
+                <button
+                  className="button secondary"
+                  disabled={loading || Boolean(error) || page >= lastPage}
+                  onClick={() =>
+                    router.push(
+                      opportunitySearchUrl(appliedFilters, { ...view, page: page + 1 }) +
+                        `#${resultsAnchor}`,
+                      { scroll: false },
+                    )
+                  }
+                >
+                  {t('Далее', 'Келесі')}
+                </button>
+              </div>
+            )}
+          </CatalogueMain>
+        </CatalogueLayout>
       </div>
     </section>
   );
+}
+
+/** Catalogue: filters in an aside and results beside it; on the home page they simply stack. */
+function CatalogueLayout({ catalogue, children }: { catalogue: boolean; children: ReactNode }) {
+  return catalogue ? <div className="catalogue-layout">{children}</div> : <>{children}</>;
+}
+function CatalogueAside({ catalogue, children }: { catalogue: boolean; children: ReactNode }) {
+  const { t } = useI18n();
+  return catalogue ? (
+    <aside
+      className="catalogue-aside stack"
+      aria-label={t('Поиск и фильтры', 'Іздеу және сүзгілер')}
+    >
+      {children}
+    </aside>
+  ) : (
+    <>{children}</>
+  );
+}
+function CatalogueMain({ catalogue, children }: { catalogue: boolean; children: ReactNode }) {
+  return catalogue ? <div className="catalogue-main stack">{children}</div> : <>{children}</>;
 }

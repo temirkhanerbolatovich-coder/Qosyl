@@ -1,23 +1,19 @@
 'use client';
 import Link from 'next/link';
-import { Bookmark, BookmarkCheck } from 'lucide-react';
+import { Bell, BellOff, Bookmark, BookmarkCheck } from 'lucide-react';
 import {
   localizedOpportunityCategoryLabels,
   localizedOpportunityConditionLabels,
   localizedSpecialtyLabels,
 } from '@/lib/localized-opportunity-labels';
-import type { SavedOpportunityFilters } from '@/lib/opportunity-saved';
+import { opportunitySearchKey, type SavedOpportunityFilters } from '@/lib/opportunity-saved';
 import type { OpportunitySavedState } from './opportunity-saved-state';
 import { useI18n } from './locale-provider';
 
 export function OpportunitySavedFeedback({ saved }: { saved: OpportunitySavedState }) {
   const { locale, t } = useI18n();
-  if (!saved.error)
-    return saved.success ? (
-      <p className="alert success" role="status" lang={locale}>
-        {saved.success}
-      </p>
-    ) : null;
+  // Confirmations are toasts; only errors stay inline, next to the action that failed.
+  if (!saved.error) return null;
   return (
     <div className="alert error" role="alert" lang={locale}>
       <div>
@@ -48,9 +44,12 @@ export function OpportunitySavedFeedback({ saved }: { saved: OpportunitySavedSta
 export function OpportunityFavoriteButton({
   itemId,
   saved,
+  compact = false,
 }: {
   itemId: string;
   saved: OpportunitySavedState;
+  /** A smaller button for card rows; the label stays, it is only sized down. */
+  compact?: boolean;
 }) {
   const { locale, t } = useI18n();
   const favorite = saved.data?.favorites.find((item) => item.itemId === itemId);
@@ -58,7 +57,7 @@ export function OpportunityFavoriteButton({
     <button
       type="button"
       lang={locale}
-      className="button secondary"
+      className={`button secondary${compact ? ' small' : ''}`}
       aria-pressed={!!favorite}
       disabled={saved.loading || saved.busy || !saved.data || saved.accessExpired}
       onClick={() =>
@@ -80,18 +79,13 @@ export function OpportunityFavoriteButton({
     </button>
   );
 }
-export function SaveOpportunitySearch({
-  filters,
-  saved,
-}: {
-  filters: SavedOpportunityFilters;
-  saved: OpportunitySavedState;
-}) {
+/** The applied conditions as one readable line; also the default name of a saved search. */
+function useFilterDescription(filters: SavedOpportunityFilters) {
   const { locale, t } = useI18n();
   const opportunityCategoryLabels = localizedOpportunityCategoryLabels(locale);
   const specialtyLabels = localizedSpecialtyLabels(locale);
   const conditionLabels = localizedOpportunityConditionLabels(locale);
-  const description =
+  return (
     [
       filters.q && `«${filters.q}»`,
       filters.category && opportunityCategoryLabels[filters.category],
@@ -102,7 +96,61 @@ export function SaveOpportunitySearch({
       filters.kazakhstanEligible && conditionLabels.kazakhstanEligible,
     ]
       .filter(Boolean)
-      .join(' · ') || t('Все возможности', 'Барлық мүмкіндік');
+      .join(' · ') || t('Все возможности', 'Барлық мүмкіндік')
+  );
+}
+
+/**
+ * "Follow this search": one press saves the applied conditions and turns notifications on
+ * (daily); pressing again stops following. Fine tuning stays in the saved searches.
+ */
+export function FollowOpportunitySearch({
+  filters,
+  saved,
+}: {
+  filters: SavedOpportunityFilters;
+  saved: OpportunitySavedState;
+}) {
+  const { locale, t } = useI18n();
+  const name = useFilterDescription(filters).slice(0, 80);
+  const key = opportunitySearchKey(filters);
+  const followed = saved.data?.searches.find(
+    (search) =>
+      search.notificationFrequency !== 'off' && opportunitySearchKey(search.filters) === key,
+  );
+  const disabled = saved.loading || saved.busy || !saved.data || saved.accessExpired;
+  return (
+    <button
+      type="button"
+      lang={locale}
+      className="button secondary small"
+      aria-pressed={!!followed}
+      disabled={disabled}
+      onClick={() =>
+        void saved.mutate(
+          followed
+            ? { action: 'removeSearch', searchId: followed.id }
+            : { action: 'saveSearch', name, filters, frequency: 'daily' },
+        )
+      }
+    >
+      {followed ? <BellOff size={16} aria-hidden="true" /> : <Bell size={16} aria-hidden="true" />}
+      {followed
+        ? t('Не следить за поиском', 'Іздеуді қадағаламау')
+        : t('Следить за этим поиском', 'Осы іздеуді қадағалау')}
+    </button>
+  );
+}
+
+export function SaveOpportunitySearch({
+  filters,
+  saved,
+}: {
+  filters: SavedOpportunityFilters;
+  saved: OpportunitySavedState;
+}) {
+  const { locale, t } = useI18n();
+  const description = useFilterDescription(filters);
   return (
     <form
       lang={locale}

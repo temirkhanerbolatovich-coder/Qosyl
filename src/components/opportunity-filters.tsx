@@ -1,5 +1,5 @@
 'use client';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   localizedOpportunityCategoryLabels,
   localizedOpportunityConditionLabels,
@@ -31,6 +31,44 @@ export function OpportunityFilters({
   const conditionLabels = localizedOpportunityConditionLabels(locale);
   const filtersId = useId();
   const [resets, setResets] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // How many results the unsent choices would give, so "Показать N" tells before it is pressed.
+  const [draftCount, setDraftCount] = useState<number | null>(null);
+  const countTimer = useRef<number | undefined>(undefined);
+  const countRequest = useRef<AbortController | null>(null);
+  function scheduleCount() {
+    window.clearTimeout(countTimer.current);
+    countTimer.current = window.setTimeout(async () => {
+      const form = formRef.current;
+      if (!form) return;
+      const params = new URLSearchParams();
+      for (const [key, value] of new FormData(form))
+        if (String(value).trim()) params.set(key, String(value).trim());
+      countRequest.current?.abort();
+      const request = (countRequest.current = new AbortController());
+      try {
+        const response = await fetch(`/api/content/posts?limit=1&page=1&${params}`, {
+          cache: 'no-store',
+          signal: request.signal,
+        });
+        const body = await response.json();
+        setDraftCount(
+          response.ok && Number.isSafeInteger(body.data?.total) ? body.data.total : null,
+        );
+      } catch {
+        // An aborted or failed count simply shows nothing; the search itself still works.
+      }
+    }, 350);
+  }
+  useEffect(
+    () => () => {
+      window.clearTimeout(countTimer.current);
+      countRequest.current?.abort();
+    },
+    [],
+  );
   const [filtersOpen, setFiltersOpen] = useState(
     () =>
       !collapseOnMobile &&
@@ -43,13 +81,93 @@ export function OpportunityFilters({
         initialFilters?.kazakhstanEligible,
       ),
   );
+  // On a phone the open filters are a bottom sheet: a modal dialog with its own focus handling.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 800px)');
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const sheetOpen = narrow && filtersOpen;
+  function resetFilters() {
+    const form = formRef.current;
+    if (form)
+      for (const element of form.elements) {
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement)
+          element.value = '';
+      }
+    setResets((count) => count + 1);
+    setDraftCount(null);
+    if (collapseOnMobile) setFiltersOpen(false);
+    onSearch('');
+  }
+  function closeSheet() {
+    setFiltersOpen(false);
+    toggleRef.current?.focus();
+  }
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const sheet = sheetRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sheet?.querySelector<HTMLElement>('select, input, button')?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSheet();
+      } else if (event.key === 'Tab' && sheet) {
+        // Keep Tab inside the sheet while it is open.
+        const items = [
+          ...sheet.querySelectorAll<HTMLElement>('select, input, button, [href]'),
+        ].filter((item) => !item.hasAttribute('disabled') && item.offsetParent !== null);
+        const first = items[0];
+        const last = items.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [sheetOpen]);
+  const activeCount = [
+    initialFilters?.category,
+    initialFilters?.specialty,
+    initialFilters?.geography,
+    initialFilters?.workMode,
+    initialFilters?.payStatus,
+    initialFilters?.kazakhstanEligible,
+    initialWindows?.added,
+    initialWindows?.deadline,
+    initialWindows?.hours,
+    initialWindows?.noExperience,
+  ].filter(Boolean).length;
+  const countNote =
+    draftCount === null ? null : (
+      <p className="muted small-text opportunity-count-note" role="status">
+        {t(`Найдётся: ${draftCount}`, `Табылады: ${draftCount}`)}
+      </p>
+    );
   return (
     <form
+      ref={formRef}
       lang={locale}
       className="panel stack"
       aria-label={t('Поиск возможностей', 'Мүмкіндіктерді іздеу')}
+      onChange={scheduleCount}
       onSubmit={(event) => {
         event.preventDefault();
+        setDraftCount(null);
         const fields = new FormData(event.currentTarget);
         const params = new URLSearchParams();
         for (const [key, value] of fields)
@@ -61,6 +179,7 @@ export function OpportunityFilters({
     >
       <OpportunitySearchBox key={resets} defaultValue={resets ? '' : (initialFilters?.q ?? '')} />
       <button
+        ref={toggleRef}
         type="button"
         className="button secondary opportunity-filter-toggle"
         aria-expanded={filtersOpen}
@@ -68,8 +187,20 @@ export function OpportunityFilters({
         onClick={() => setFiltersOpen((open) => !open)}
       >
         {filtersOpen ? t('Скрыть фильтры', 'Сүзгілерді жасыру') : t('Фильтры', 'Сүзгілер')}
+        {activeCount > 0 && !filtersOpen ? ` · ${activeCount}` : ''}
       </button>
-      <div id={filtersId} className="opportunity-filter-details" data-open={filtersOpen}>
+      {sheetOpen && (
+        <div className="opportunity-sheet-backdrop" onClick={closeSheet} aria-hidden="true" />
+      )}
+      <div
+        id={filtersId}
+        ref={sheetRef}
+        className="opportunity-filter-details"
+        data-open={filtersOpen}
+        role={sheetOpen ? 'dialog' : undefined}
+        aria-modal={sheetOpen ? true : undefined}
+        aria-label={sheetOpen ? t('Фильтры', 'Сүзгілер') : undefined}
+      >
         <div className="form-grid">
           <label className="field">
             {t('Тип возможности', 'Мүмкіндік түрі')}
@@ -193,28 +324,31 @@ export function OpportunityFilters({
             'Бағыт материалдағы сөздер бойынша анықталады. Қатысу шарттары мен белгісіз мерзімдерді ұйымдастырушыдан нақтылаңыз.',
           )}
         </p>
+        <div className="opportunity-sheet-footer">
+          {countNote}
+          <div className="button-row">
+            <button className="button" type="submit">
+              {draftCount === null
+                ? t('Показать', 'Көрсету')
+                : t(`Показать ${draftCount}`, `${draftCount} көрсету`)}
+            </button>
+            <button className="button secondary" type="button" onClick={resetFilters}>
+              {t('Сбросить', 'Тазалау')}
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="button-row">
+      {!sheetOpen && countNote}
+      <div className="button-row opportunity-form-actions">
         <button className="button" type="submit">
           {t('Найти возможности', 'Мүмкіндіктерді табу')}
         </button>
-        <button
-          className="button secondary"
-          type="button"
-          onClick={(event) => {
-            const form = event.currentTarget.form;
-            if (form)
-              for (const element of form.elements) {
-                if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement)
-                  element.value = '';
-              }
-            setResets((count) => count + 1);
-            if (collapseOnMobile) setFiltersOpen(false);
-            onSearch('');
-          }}
-        >
-          {t('Сбросить', 'Тазалау')}
-        </button>
+        {/* Nothing is applied, so there is nothing to reset: the button appears with the first filter. */}
+        {(activeCount > 0 || Boolean(initialFilters?.q)) && (
+          <button className="button secondary" type="button" onClick={resetFilters}>
+            {t('Сбросить', 'Тазалау')}
+          </button>
+        )}
       </div>
     </form>
   );

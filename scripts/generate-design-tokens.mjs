@@ -14,7 +14,13 @@ ${Object.entries(tokens.radiusPx)
   .map(([name, value]) => `  --radius-${name}: ${value}px;`)
   .join('\n')}
   --content-width: ${tokens.contentMaxWidthPx}px;
-  --duration: 180ms;
+${Object.entries(tokens.motion.durationMs)
+  .map(([name, value]) => `  --motion-${name}: ${value}ms;`)
+  .join('\n')}
+${Object.entries(tokens.motion.easing)
+  .map(([name, value]) => `  --ease-${name}: ${value};`)
+  .join('\n')}
+  --duration: var(--motion-base);
   --bg: var(--background);
   --paper: var(--surface);
   --ink: var(--text-primary);

@@ -78,9 +78,12 @@ test('opportunities: failed request offers retry and preserves entered filters',
   // The suggestion list overlays the controls below it until it is dismissed.
   await form.locator('[name=q]').press('Escape');
   const filterToggle = form.getByRole('button', { name: 'Фильтры', exact: true });
-  if (await filterToggle.isVisible()) await filterToggle.click();
+  const onPhone = await filterToggle.isVisible();
+  if (onPhone) await filterToggle.click();
   await form.locator('[name=specialty]').selectOption('education');
   await checkState(page, info, 'opportunities-error');
+  // A phone's filter sheet covers the page; closing it keeps the chosen values.
+  if (onPhone) await page.keyboard.press('Escape');
   fail = false;
   await page.getByRole('button', { name: 'Повторить загрузку' }).click();
   await expect(

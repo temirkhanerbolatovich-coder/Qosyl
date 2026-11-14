@@ -87,5 +87,20 @@
     "large": 12,
     "xl": 16
   },
-  "contentMaxWidthPx": 1280
+  "contentMaxWidthPx": 1280,
+  "motion": {
+    "durationMs": {
+      "instant": 0,
+      "fast": 100,
+      "base": 150,
+      "slow": 250,
+      "exit": 200,
+      "page": 400
+    },
+    "easing": {
+      "enter": "cubic-bezier(0, 0, 0.2, 1)",
+      "exit": "cubic-bezier(0.4, 0, 1, 1)",
+      "move": "cubic-bezier(0.4, 0, 0.2, 1)"
+    }
+  }
 }

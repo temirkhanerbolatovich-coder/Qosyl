@@ -17,6 +17,7 @@ import { OpportunityConditions } from './opportunity-conditions';
 import { OpportunityDeadlineReminder } from './opportunity-deadline-reminder';
 import { OpportunityFavoriteNote } from './opportunity-favorite-note';
 import { OpportunityCompare } from './opportunity-compare';
+import { LoadingNote } from './state-note';
 
 export function OpportunitySavedScreen() {
   const { locale, t } = useI18n();
@@ -61,9 +62,9 @@ export function OpportunitySavedScreen() {
       </p>
       <OpportunitySavedFeedback saved={saved} />
       {saved.loading && (
-        <p role="status">
+        <LoadingNote>
           {t('Загрузка избранного и поисков…', 'Таңдаулылар мен іздеулер жүктелуде…')}
-        </p>
+        </LoadingNote>
       )}
       {saved.data && (
         <>

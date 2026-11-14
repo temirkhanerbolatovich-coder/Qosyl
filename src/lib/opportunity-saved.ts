@@ -88,6 +88,8 @@ export const opportunitySavedCommand = z.discriminatedUnion('action', [
     action: z.literal('saveSearch'),
     name: z.string().trim().min(1).max(80),
     filters: savedOpportunityFilters,
+    // Optional: switch notifications on while saving ("follow this search").
+    frequency: opportunityNotificationFrequency.optional(),
   }),
   z.strictObject({ action: z.literal('removeSearch'), searchId: id }),
   z.strictObject({

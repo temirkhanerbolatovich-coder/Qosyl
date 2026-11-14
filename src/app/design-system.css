@@ -599,6 +599,10 @@ summary:focus-visible {
     min-width: 0;
   }
 }
+/*
+ * Motion is a preference. The system setting and the in-app switch (data-motion="off" on <html>)
+ * both remove every animation and transition. State changes still happen, just without movement.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -607,6 +611,13 @@ summary:focus-visible {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
 }
 
 /* Marketplace refresh: let task conditions and the next action lead each screen. */
@@ -1074,8 +1085,203 @@ select {
 .opportunity-list > .panel {
   margin-top: 0;
 }
+/* Phone filters are a bottom sheet with a sticky "Показать N" footer; elsewhere that footer is off. */
+.opportunity-sheet-footer {
+  display: none;
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 800px) {
+  .opportunity-filter-details[data-open='true'] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 51;
+    max-height: 85dvh;
+    overflow-y: auto;
+    padding: var(--space-16) var(--space-16) 0;
+    background: var(--surface);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: 0 -8px 24px var(--shadow-color);
+    animation: sheet-in var(--motion-slow) var(--ease-enter) both;
+  }
+  .opportunity-filter-details[data-open='true'] .opportunity-sheet-footer {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    gap: var(--space-8);
+    margin-inline: calc(-1 * var(--space-16));
+    padding: var(--space-12) var(--space-16);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .opportunity-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgb(15 23 42 / 55%);
+    animation: backdrop-in var(--motion-base) linear both;
+  }
+}
+/* Phone catalogue: the first result should be close to the top, so the intro, chips and results
+   bar are tightened; nothing is removed that the person needs to decide. */
+@media (max-width: 800px) {
+  .opportunities-catalogue .container > .muted {
+    display: none;
+  }
+  .opportunities-catalogue .catalogue-main .opportunity-quick-filters ul {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .opportunities-catalogue .catalogue-main .opportunity-quick-filters li {
+    flex: none;
+  }
+  .opportunity-results-bar {
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .opportunity-results-bar h2 {
+    font-size: 1.15rem;
+    margin: 0;
+  }
+  .opportunity-sort {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .opportunity-sort select {
+    flex: 1;
+  }
+}
+.opportunity-list .opportunity-card p {
+  margin: 0;
+}
+/* Phone: a smaller title, "Фильтры" and "Найти" side by side, a quieter sign-in prompt. */
+@media (max-width: 800px) {
+  .catalogue-title {
+    font-size: 1.75rem;
+    line-height: 1.2;
+  }
+  .catalogue-aside form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .catalogue-aside form > * {
+    grid-column: 1 / -1;
+  }
+  .catalogue-aside form > .opportunity-filter-toggle {
+    grid-row: 2;
+    grid-column: 1;
+  }
+  .catalogue-aside form > .opportunity-form-actions {
+    grid-row: 2;
+    grid-column: 2;
+    flex-wrap: nowrap;
+  }
+  .catalogue-aside form > .opportunity-form-actions .button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: var(--space-8);
+  }
+  .catalogue-aside form > .opportunity-count-note {
+    grid-row: 3;
+  }
+  .catalogue-aside > p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+}
+/* Catalogue: filters beside the results on a wide screen, stacked on a narrow one. */
+.catalogue-layout {
+  display: grid;
+  gap: var(--space-24);
+  align-items: start;
+}
+.catalogue-aside,
+.catalogue-main {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .catalogue-layout {
+    grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
+  }
+  /* One column of fields in the aside, and the apply row stays reachable while it scrolls. */
+  .catalogue-aside .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalogue-aside .opportunity-form-actions {
+    position: sticky;
+    bottom: calc(-1 * var(--space-16));
+    padding-block: var(--space-8);
+    background: var(--surface);
+  }
+  .catalogue-aside {
+    position: sticky;
+    top: var(--space-16);
+    max-height: calc(100vh - var(--space-32));
+    overflow-y: auto;
+  }
+}
+/* List cards: a short summary, conditions as one wrapping row of labelled values, one action row. */
+.opportunity-list .opportunity-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+}
 .opportunity-list .opportunity-conditions {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.opportunity-list .opportunity-conditions > div {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+  font-size: 0.9rem;
+}
+.opportunity-list .opportunity-conditions dt,
+.opportunity-list .opportunity-conditions dd {
+  display: inline;
+  margin: 0;
+}
+.opportunity-list .opportunity-conditions dt::after {
+  content: ':';
+}
+.opportunity-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-16);
+}
+.opportunity-list .opportunity-card {
+  gap: var(--space-8);
 }
 .opportunity-results-bar {
   display: flex;
@@ -1101,6 +1307,102 @@ select {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+/* List states: loading, empty and error read as one family. */
+.state-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0;
+}
+.state-empty {
+  color: var(--muted);
+}
+.state-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--action);
+  border-radius: 50%;
+  /* Hidden for the first second; reduced motion removes the animation and so the spinner. */
+  opacity: 0;
+  animation:
+    state-spinner-show var(--motion-base) linear 1s forwards,
+    state-spin 0.8s linear infinite;
+}
+@keyframes state-spinner-show {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Results that are being refreshed stay in place, dimmed, so the page does not jump. */
+.is-updating {
+  opacity: 0.55;
+  transition: opacity var(--motion-base) var(--ease-move);
+}
+/* Toasts: short confirmations with undo. They enter slowly and leave quickly, and stay clear of
+   the content they confirm. */
+.toast-region {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--space-16);
+  z-index: 60;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-8);
+  padding-inline: var(--space-16);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  max-width: min(100%, 32rem);
+  padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16);
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow);
+  animation: toast-in var(--motion-slow) var(--ease-enter) both;
+}
+.toast[data-state='leaving'] {
+  animation: toast-out var(--motion-exit) var(--ease-exit) both;
+}
+.toast p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  flex: none;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 .checkbox-row {
   display: inline-flex;

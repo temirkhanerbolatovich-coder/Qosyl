@@ -122,6 +122,35 @@ test('private opportunity favorites and saved searches', { concurrency: false },
       assert.equal((await queryOpportunitySaves(db, owner)).searches.length, 1);
       assert.deepEqual((await queryOpportunitySaves(db, other)).searches, []);
     });
+    await t.test('following a search saves it with notifications on, once', async () => {
+      const marker = randomUUID().slice(0, 8);
+      const follow = (name: string, filters: { q: string }, frequency?: 'daily' | 'weekly') =>
+        mutateOpportunitySaves(db, owner, { action: 'saveSearch', name, filters, frequency });
+      await follow('Follow ' + marker, { q: 'follow' + marker }, 'daily');
+      const find = async (name: string) =>
+        (await queryOpportunitySaves(db, owner)).searches.find((search) => search.name === name)!;
+      const followed = await find('Follow ' + marker);
+      assert.equal(followed.notificationFrequency, 'daily');
+      assert.ok(followed.nextNotificationAt);
+      // Repeating the request neither duplicates the search nor moves its schedule.
+      await follow('Follow ' + marker, { q: 'follow' + marker }, 'daily');
+      const again = await find('Follow ' + marker);
+      assert.equal(again.id, followed.id);
+      assert.deepEqual(again.nextNotificationAt, followed.nextNotificationAt);
+      // A search saved without notifications is switched on by following it, not duplicated.
+      await follow('Plain ' + marker, { q: 'plain' + marker });
+      assert.equal((await find('Plain ' + marker)).notificationFrequency, 'off');
+      const before = (await queryOpportunitySaves(db, owner)).searches.length;
+      await follow('Plain again ' + marker, { q: 'plain' + marker }, 'weekly');
+      assert.equal((await find('Plain ' + marker)).notificationFrequency, 'weekly');
+      assert.equal((await queryOpportunitySaves(db, owner)).searches.length, before);
+      assert.equal(
+        (await queryOpportunitySaves(db, other)).searches.some(
+          (search) => search.name === followed.name,
+        ),
+        false,
+      );
+    });
     await t.test('a favorite note is private, trimmed, bounded and removable', async () => {
       const favoriteId = (await queryOpportunitySaves(db, owner)).favorites[0].id;
       const note = (value: string, user = owner) =>

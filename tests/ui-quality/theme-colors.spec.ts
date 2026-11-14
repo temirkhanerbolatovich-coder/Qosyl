@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test';
 test('primary and secondary actions show hover, focus, active and disabled states', async ({
   page,
 }) => {
-  await page.goto('/opportunities');
+  // "Сбросить" appears once something is applied, so the page opens with a filter.
+  await page.goto('/opportunities?workMode=remote');
   const primary = page.getByRole('button', { name: 'Найти возможности', exact: true });
   const secondary = page.getByRole('button', { name: 'Сбросить', exact: true });
   const disabled = page.getByRole('button', { name: 'Назад', exact: true });

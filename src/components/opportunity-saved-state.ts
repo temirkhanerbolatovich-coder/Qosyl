@@ -8,6 +8,7 @@ import {
   type OpportunitySavedData,
 } from '@/contracts/opportunity-saved';
 import { useViewer } from './platform';
+import { useToast } from './toast-provider';
 import { useI18n } from './locale-provider';
 import { savedServerFeedback } from '@/lib/opportunity-saved-feedback';
 
@@ -76,6 +77,96 @@ const successMessages: Record<SavedCommand['action'], readonly [string, string]>
   setSearchNotifications: ['Настройки уведомлений сохранены.', 'Хабарландыру баптаулары сақталды.'],
 };
 
+type MutateOptions = { silent?: boolean };
+type Latest = {
+  current: {
+    data: OpportunitySavedData | null;
+    t: (ru: string, kk: string) => string;
+    toast: ReturnType<typeof useToast>;
+  };
+};
+
+/**
+ * Confirms a saved change in a toast. Adding or removing a favorite and removing a search can be
+ * undone; undoing a removal also restores the note, reminder and notification frequency.
+ */
+function announce(
+  command: SavedCommand,
+  before: OpportunitySavedData | null,
+  after: OpportunitySavedData,
+  latest: Latest,
+  mutateRef: { current: (command: SavedCommand, options?: MutateOptions) => Promise<boolean> },
+) {
+  const { t, toast } = latest.current;
+  const run = (next: SavedCommand) => mutateRef.current(next, { silent: true });
+  // Undo reports whether it worked; a failure leaves its error inline and no confirmation toast.
+  let undo: (() => Promise<boolean>) | undefined;
+  if (command.action === 'saveFavorite') {
+    const added = after.favorites.find((favorite) => favorite.itemId === command.itemId);
+    if (added) undo = () => run({ action: 'removeFavorite', favoriteId: added.id });
+  } else if (command.action === 'removeFavorite') {
+    const removed = before?.favorites.find((favorite) => favorite.id === command.favoriteId);
+    if (removed)
+      undo = async () => {
+        if (!(await run({ action: 'saveFavorite', itemId: removed.itemId }))) return false;
+        const restored = (await readSaved().catch(() => null))?.favorites.find(
+          (favorite) => favorite.itemId === removed.itemId,
+        );
+        if (!restored) return true;
+        if (removed.note)
+          await run({ action: 'setFavoriteNote', favoriteId: restored.id, note: removed.note });
+        if (removed.reminderDaysBefore)
+          await run({
+            action: 'setFavoriteReminder',
+            favoriteId: restored.id,
+            daysBefore: removed.reminderDaysBefore,
+          });
+        return true;
+      };
+  } else if (command.action === 'removeSearch') {
+    const removed = before?.searches.find((search) => search.id === command.searchId);
+    if (removed)
+      undo = async () => {
+        if (!(await run({ action: 'saveSearch', name: removed.name, filters: removed.filters })))
+          return false;
+        if (removed.notificationFrequency === 'off') return true;
+        const restored = (await readSaved().catch(() => null))?.searches
+          .filter((search) => search.name === removed.name)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        if (restored)
+          await run({
+            action: 'setSearchNotifications',
+            searchId: restored.id,
+            frequency: removed.notificationFrequency,
+          });
+        return true;
+      };
+  }
+  // Following a search says what will happen, since the toast is the only explanation.
+  const following =
+    command.action === 'saveSearch' && command.frequency && command.frequency !== 'off';
+  if (following) {
+    const created = after.searches
+      .filter((search) => search.name === command.name)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (created) undo = () => run({ action: 'removeSearch', searchId: created.id });
+  }
+  toast.show({
+    text: following
+      ? t(
+          'Вы следите за поиском. Новые совпадения придут в уведомления раз в сутки.',
+          'Сіз іздеуді қадағалап отырсыз. Жаңа сәйкестіктер тәулігіне бір рет хабарламада келеді.',
+        )
+      : t(...successMessages[command.action]),
+    actionLabel: undo ? t('Отменить', 'Болдырмау') : undefined,
+    onAction: undo
+      ? async () => {
+          if (await undo()) toast.show({ text: t('Действие отменено.', 'Әрекет болдырылмады.') });
+        }
+      : undefined,
+  });
+}
+
 /** Keep private responses scoped to their account, including after account changes in this tab. */
 export function useOpportunitySaved(enabled = true) {
   const { locale, t } = useI18n();
@@ -92,10 +183,13 @@ export function useOpportunitySaved(enabled = true) {
     accessExpired: boolean;
   }>({ owner: null, data: null, loading: true, error: '', accessExpired: false });
   const [busyOwner, setBusyOwner] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{
-    owner: string | null;
-    action: SavedCommand['action'] | null;
-  }>({ owner: null, action: null });
+  const toast = useToast();
+  // Undo steps run later than the render that created them, so they read the latest values here.
+  const latest = useRef({ data: null as OpportunitySavedData | null, t, toast });
+  latest.current = { data: state.data, t, toast };
+  const mutateRef = useRef<(command: SavedCommand, options?: MutateOptions) => Promise<boolean>>(
+    async () => false,
+  );
   useEffect(() => {
     activeOwner.current = owner;
     let active = true;
@@ -154,12 +248,13 @@ export function useOpportunitySaved(enabled = true) {
     }
   }, [owner]);
   const mutate = useCallback(
-    async (command: SavedCommand) => {
+    async (command: SavedCommand, options: MutateOptions = {}) => {
       if (!owner || pendingOwner.current === owner) return false;
       pendingOwner.current = owner;
       const request = ++requestVersion.current;
       setBusyOwner(owner);
-      setNotice({ owner, action: null });
+      // What a removal deletes is read before it happens, so undo can put it back.
+      const before = latest.current.data;
       let committed = false;
       try {
         const result = opportunitySavedMutationSchema.safeParse(await requestSaved(command));
@@ -170,10 +265,7 @@ export function useOpportunitySaved(enabled = true) {
         const data = await readSaved();
         if (activeOwner.current !== owner || request !== requestVersion.current) return false;
         setState({ owner, data, loading: false, error: '', accessExpired: false });
-        setNotice({
-          owner,
-          action: command.action,
-        });
+        if (!options.silent) announce(command, before, data, latest, mutateRef);
         return true;
       } catch (error) {
         if (activeOwner.current === owner && request === requestVersion.current)
@@ -199,12 +291,13 @@ export function useOpportunitySaved(enabled = true) {
     },
     [owner],
   );
+  mutateRef.current = mutate;
   const current = state.owner === owner;
   const rawError = current ? state.error : '';
   const localError = Object.hasOwn(localErrorKk, rawError);
   const serverFeedback = savedServerFeedback(rawError, locale);
   const error = localError ? t(rawError, localErrorKk[rawError]) : serverFeedback.text;
-  const success = notice.action ? t(...successMessages[notice.action]) : '';
+
   return {
     signedIn: !!owner,
     data: current && !state.accessExpired ? state.data : null,
@@ -212,7 +305,6 @@ export function useOpportunitySaved(enabled = true) {
     error,
     errorLanguage: localError ? locale : serverFeedback.language,
     originalError: !localError && serverFeedback.original,
-    success: current && !state.accessExpired && notice.owner === owner ? success : '',
     accessExpired: current && state.accessExpired,
     busy: !!owner && busyOwner === owner,
     mutate,

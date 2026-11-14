@@ -55,7 +55,16 @@
   --radius-large: 12px;
   --radius-xl: 16px;
   --content-width: 1280px;
-  --duration: 180ms;
+  --motion-instant: 0ms;
+  --motion-fast: 100ms;
+  --motion-base: 150ms;
+  --motion-slow: 250ms;
+  --motion-exit: 200ms;
+  --motion-page: 400ms;
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration: var(--motion-base);
   --bg: var(--background);
   --paper: var(--surface);
   --ink: var(--text-primary);

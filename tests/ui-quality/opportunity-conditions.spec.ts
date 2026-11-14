@@ -82,8 +82,12 @@ test('applied filters stay visible and can be removed independently', async ({ p
     await expect(form.locator('[name=workMode]')).toBeHidden();
     await toggle.focus();
     await page.keyboard.press('Enter');
+    // On a phone the filters are a modal sheet: focus moves in, Escape closes it and focus returns.
+    const sheet = page.getByRole('dialog', { name: 'Фильтры' });
+    await expect(sheet).toBeVisible();
     await expect(form.locator('[name=workMode]')).toBeVisible();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
     await expect(form.locator('[name=workMode]')).toBeHidden();
     await expect(toggle).toBeFocused();
   }
@@ -117,7 +121,12 @@ test('applied filters stay visible and can be removed independently', async ({ p
 
   if (collapsible) await toggle.click();
   await form.locator('[name=workMode]').selectOption('hybrid');
-  await form.getByRole('button', { name: 'Найти возможности' }).click();
+  // The open phone sheet has its own apply button ("Показать N"); elsewhere it is the form's.
+  await (
+    collapsible
+      ? page.getByRole('dialog', { name: 'Фильтры' }).getByRole('button', { name: /^Показать/ })
+      : form.getByRole('button', { name: 'Найти возможности' })
+  ).click();
   await expect(page).toHaveURL(/workMode=hybrid/);
   await expect(applied.getByRole('link', { name: 'Снять фильтр: Гибридно' })).toBeVisible();
   if (collapsible) await expect(form.locator('[name=workMode]')).toBeHidden();

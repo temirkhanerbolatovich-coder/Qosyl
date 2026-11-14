@@ -44,6 +44,27 @@ const results = Object.entries(tokens.themes).flatMap(([theme, colors]) =>
     return { ...pair, ratio: Number(ratio.toFixed(3)), passed: ratio >= pair.minimum };
   }),
 );
+// Motion: short, ordered durations; exits quicker than entrances; instant means no transition.
+const motion = tokens.motion.durationMs;
+const motionProblems = [
+  ...Object.entries(motion)
+    .filter(([, value]) => !Number.isInteger(value) || value < 0 || value > 600)
+    .map(([name]) => `${name} must be an integer between 0 and 600 ms`),
+  ...(motion.instant === 0 ? [] : ['instant must be 0']),
+  ...(motion.fast < motion.base && motion.base < motion.slow
+    ? []
+    : ['fast < base < slow must hold']),
+  ...(motion.exit < motion.slow ? [] : ['exit must be shorter than slow']),
+  ...Object.entries(tokens.motion.easing)
+    .filter(
+      ([, value]) => !/^cubic-bezier\(\s*[\d.]+,\s*[\d.-]+,\s*[\d.]+,\s*[\d.-]+\s*\)$/.test(value),
+    )
+    .map(([name]) => `easing ${name} must be a cubic-bezier`),
+];
+if (motionProblems.length) {
+  console.error(`Motion tokens are invalid:\n- ${motionProblems.join('\n- ')}`);
+  process.exitCode = 1;
+}
 await mkdir('outputs/ui-quality', { recursive: true });
 await writeFile(
   'outputs/ui-quality/token-contrast.json',

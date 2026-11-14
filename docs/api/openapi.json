@@ -9420,6 +9420,14 @@
                   }
                 },
                 "additionalProperties": false
+              },
+              "frequency": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "daily",
+                  "weekly"
+                ]
               }
             },
             "required": [

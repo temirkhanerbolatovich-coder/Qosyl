@@ -169,7 +169,27 @@ export async function mutateOpportunitySaves(database: PrismaClient, actor: User
       const existing = await tx.savedOpportunitySearch.findUnique({
         where: { userId_queryHash: { userId: actor.id, queryHash } },
       });
-      if (existing) return { saved: true as const };
+      // "Follow" saves the search and switches its notifications on in one step; the baseline is
+      // the moment of the request, so already published items are not sent.
+      const follow = input.frequency && input.frequency !== 'off' ? input.frequency : null;
+      const followNow = follow
+        ? (await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`)[0].now
+        : null;
+      const followData =
+        follow && followNow
+          ? {
+              notificationFrequency: follow,
+              notificationSince: followNow,
+              nextNotificationAt: new Date(
+                followNow.getTime() + opportunityNotificationDelay[follow],
+              ),
+            }
+          : null;
+      if (existing) {
+        if (followData && existing.notificationFrequency === 'off')
+          await tx.savedOpportunitySearch.update({ where: { id: existing.id }, data: followData });
+        return { saved: true as const };
+      }
       assert(
         (await tx.savedOpportunitySearch.count({ where: { userId: actor.id } })) < 20,
         409,
@@ -187,6 +207,7 @@ export async function mutateOpportunitySaves(database: PrismaClient, actor: User
           category: filters.category ?? null,
           geography: filters.geography,
           specialty: filters.specialty ?? null,
+          ...followData,
         },
       });
     }

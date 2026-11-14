@@ -2415,13 +2415,6 @@ textarea::placeholder {
     gap: 18px;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  * {
-    scroll-behavior: auto !important;
-    animation: none !important;
-    transition: none !important;
-  }
-}
 .auth-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 440px);

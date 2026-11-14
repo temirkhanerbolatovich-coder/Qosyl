@@ -8,6 +8,7 @@ import { SiteHeader } from '@/components/site-header';
 import { themeBootstrap } from '@/lib/theme';
 import { localeCookieName, parseLocale } from '@/lib/locale';
 import { LocaleProvider } from '@/components/locale-provider';
+import { ToastProvider } from '@/components/toast-provider';
 import { LocaleNotice, PilotBanner, SiteFooter, SkipLink } from '@/components/layout-copy';
 import './globals.css';
 import './design-system.css';
@@ -60,13 +61,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <LocaleProvider initialLocale={locale}>
           <SkipLink />
           <ViewerProvider viewer={viewer}>
-            <SiteHeader viewer={viewer} productName={config.productName} />
-            {config.localMode && <PilotBanner />}
-            <LocaleNotice />
-            <main id="main-content" lang="ru">
-              {children}
-            </main>
-            <SiteFooter productName={config.productName} />
+            <ToastProvider>
+              <SiteHeader viewer={viewer} productName={config.productName} />
+              {config.localMode && <PilotBanner />}
+              <LocaleNotice />
+              <main id="main-content" lang="ru">
+                {children}
+              </main>
+              <SiteFooter productName={config.productName} />
+            </ToastProvider>
           </ViewerProvider>
         </LocaleProvider>
       </body>
