@@ -432,21 +432,22 @@ export function Opportunities({
                 <span lang={opportunityContentLanguage(post.language)}>{post.sourceName}</span>
               </span>
               <h3 lang={opportunityContentLanguage(post.language)}>{post.title}</h3>
-              <p className="muted small-text">
-                {post.publishedAt
-                  ? t(
-                      `Опубликовано ${date(post.publishedAt, false, locale)}`,
-                      `Жарияланған күні: ${date(post.publishedAt, false, locale)}`,
-                    )
-                  : t('Дата публикации не указана.', 'Жарияланған күні көрсетілмеген.')}
-              </p>
+              {/* An unknown publication date is only explained on the detail page. */}
+              {post.publishedAt && (
+                <p className="muted small-text">
+                  {t(
+                    `Опубликовано ${date(post.publishedAt, false, locale)}`,
+                    `Жарияланған күні: ${date(post.publishedAt, false, locale)}`,
+                  )}
+                </p>
+              )}
               <p lang={opportunityContentLanguage(post.language)}>{post.summary}</p>
               {post.geography && (
                 <p className="small-text" lang={opportunityContentLanguage(post.language)}>
                   {post.geography}
                 </p>
               )}
-              <OpportunityConditions post={post} />
+              <OpportunityConditions post={post} compact />
               <p className="small-text">
                 {post.deadline
                   ? t(

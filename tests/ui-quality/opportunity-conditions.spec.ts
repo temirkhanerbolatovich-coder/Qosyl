@@ -29,8 +29,9 @@ test('internship conditions show known and unknown values', async ({ page }, inf
   await expect(card).toBeVisible();
   await expect(card.getByText('Принимают из Казахстана')).toBeVisible();
   await expect(card.getByText('15–20 часов в неделю')).toBeVisible();
-  // Pay and experience are not confirmed for this card, so both stay "to clarify".
-  await expect(card.locator('dl').getByText('Уточняйте у организатора')).toHaveCount(2);
+  // Pay and experience are not confirmed, so a list card names them once instead of two empty rows.
+  await expect(card.locator('dl').getByText('Уточняйте у организатора')).toHaveCount(0);
+  await expect(card.getByText('Не указано: опыт, оплата. Уточняйте у организатора.')).toBeVisible();
   await expect(card.getByRole('link', { name: 'К организатору' })).toHaveAttribute(
     'href',
     post.url,
@@ -277,5 +278,9 @@ test('card shows extra formats, weekly hours and experience; unknown stays unkno
   await expect(first.getByText('Не требуется')).toBeVisible();
   // Unconfirmed values are never turned into a "no": all stay "to clarify".
   const second = page.getByRole('article').filter({ hasText: unknown.title });
-  await expect(second.locator('dl').getByText('Уточняйте у организатора')).toHaveCount(5);
+  await expect(
+    second.getByText(
+      'Не указано: формат, участие из Казахстана, нагрузка, опыт, оплата. Уточняйте у организатора.',
+    ),
+  ).toBeVisible();
 });

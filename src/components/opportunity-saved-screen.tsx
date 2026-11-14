@@ -146,7 +146,7 @@ export function OpportunitySavedScreen() {
                             {post.geography}
                           </p>
                         )}
-                        <OpportunityConditions post={post} />
+                        <OpportunityConditions post={post} compact />
                         <p className="small-text">
                           {post.deadline
                             ? t(

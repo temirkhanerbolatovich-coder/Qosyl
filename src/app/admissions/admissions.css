@@ -5,6 +5,17 @@
 .admissions-intro {
   max-width: 780px;
 }
+/* The global reset removes list markers; the guide's steps need their numbers and bullets. */
+.admissions-page .prose ol {
+  list-style: decimal;
+}
+.admissions-page .prose ul {
+  list-style: disc;
+}
+.admissions-page .prose li::marker {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
 .admissions-nav {
   display: flex;
   flex-wrap: wrap;

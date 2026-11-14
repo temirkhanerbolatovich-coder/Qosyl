@@ -65,7 +65,17 @@ export function opportunityConditionEntries(
   ];
 }
 
-export function OpportunityConditions({ post }: { post: PublicContentPost }) {
+/**
+ * Conditions of one opportunity. In a list (`compact`) only confirmed values get a row and the
+ * unconfirmed ones are named once in a short note, so cards stay short; the detail page lists all.
+ */
+export function OpportunityConditions({
+  post,
+  compact = false,
+}: {
+  post: PublicContentPost;
+  compact?: boolean;
+}) {
   const { locale, t } = useI18n();
   const conditions = opportunityConditionEntries(post, locale, t);
   if (
@@ -74,17 +84,35 @@ export function OpportunityConditions({ post }: { post: PublicContentPost }) {
   ) {
     return null;
   }
+  const shown = compact
+    ? conditions.filter((condition) => condition.value || condition.fallback)
+    : conditions;
+  const unconfirmed = compact
+    ? conditions.filter((condition) => !condition.value && !condition.fallback)
+    : [];
 
   return (
-    <dl className="opportunity-conditions">
-      {conditions.map(({ label, value, fallback }) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd lang={value ? opportunityContentLanguage(post.language) : undefined}>
-            {value || fallback || t('Уточняйте у организатора', 'Ұйымдастырушыдан нақтылаңыз')}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="opportunity-conditions">
+        {shown.map(({ label, value, fallback }) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd lang={value ? opportunityContentLanguage(post.language) : undefined}>
+              {value || fallback || t('Уточняйте у организатора', 'Ұйымдастырушыдан нақтылаңыз')}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {unconfirmed.length > 0 && (
+        <p className="muted small-text">
+          {t('Не указано: ', 'Көрсетілмеген: ')}
+          {/* Only the first letter is lowered, so "Казахстана" keeps its capital. */}
+          {unconfirmed
+            .map(({ label }) => label.charAt(0).toLowerCase() + label.slice(1))
+            .join(', ')}
+          {t('. Уточняйте у организатора.', '. Ұйымдастырушыдан нақтылаңыз.')}
+        </p>
+      )}
+    </>
   );
 }
