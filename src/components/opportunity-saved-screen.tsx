@@ -5,6 +5,7 @@ import { opportunitySearchUrl } from '@/lib/opportunity-saved';
 import { date } from '@/lib/labels';
 import {
   localizedOpportunityCategoryLabels,
+  localizedOpportunityConditionLabels,
   localizedSpecialtyLabels,
   opportunityContentLanguage,
 } from '@/lib/localized-opportunity-labels';
@@ -12,17 +13,38 @@ import { useOpportunitySaved } from './opportunity-saved-state';
 import { OpportunityFavoriteButton, OpportunitySavedFeedback } from './opportunity-saved-controls';
 import { OpportunitySearchNotificationControls } from './opportunity-search-notification-controls';
 import { useI18n } from './locale-provider';
+import { OpportunityConditions } from './opportunity-conditions';
+import { OpportunityDeadlineReminder } from './opportunity-deadline-reminder';
+import { OpportunityFavoriteNote } from './opportunity-favorite-note';
+import { OpportunityCompare } from './opportunity-compare';
 
 export function OpportunitySavedScreen() {
   const { locale, t } = useI18n();
   const opportunityCategoryLabels = localizedOpportunityCategoryLabels(locale);
   const specialtyLabels = localizedSpecialtyLabels(locale);
+  const conditionLabels = localizedOpportunityConditionLabels(locale);
   const saved = useOpportunitySaved();
   const [now, setNow] = useState(() => Date.now());
+  const [typeFilter, setTypeFilter] = useState('');
+  const [compareIds, setCompareIds] = useState<string[]>([]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+  // Types present among the currently available favorites, with how many each has.
+  const typeCounts = new Map<string, number>();
+  for (const favorite of saved.data?.favorites ?? [])
+    if (favorite.post && new Date(favorite.post.expiresAt).getTime() > now)
+      typeCounts.set(favorite.post.category, (typeCounts.get(favorite.post.category) ?? 0) + 1);
+  const categoriesInFavorites = [...typeCounts.entries()];
+  // Up to three available favorites of one type can be compared; removed ones drop out silently.
+  const compared = compareIds.flatMap((itemId) => {
+    const post = (saved.data?.favorites ?? []).find((favorite) => favorite.itemId === itemId)?.post;
+    return post && new Date(post.expiresAt).getTime() > now ? [post] : [];
+  });
+  const compareCategory = compared[0]?.category;
+  // A type whose last favorite was removed or expired falls back to showing everything.
+  const shownType = typeCounts.has(typeFilter) ? typeFilter : '';
   return (
     <div className="container page-shell stack" lang={locale}>
       <div className="button-row">
@@ -74,14 +96,38 @@ export function OpportunitySavedScreen() {
                 )}
               </p>
             )}
+            {categoriesInFavorites.length > 1 && (
+              <label className="field opportunity-sort">
+                {t('Показать тип', 'Түрі бойынша көрсету')}
+                <select value={shownType} onChange={(event) => setTypeFilter(event.target.value)}>
+                  <option value="">{t('Все типы', 'Барлық түрі')}</option>
+                  {categoriesInFavorites.map(([category, count]) => (
+                    <option key={category} value={category}>
+                      {opportunityCategoryLabels[category]} ({count})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <p className="muted small-text">
+              {t(
+                'Чтобы сравнить, отметьте от 2 до 3 возможностей одного типа.',
+                'Салыстыру үшін бір түрдегі 2–3 мүмкіндікті белгілеңіз.',
+              )}
+            </p>
+            {compared.length >= 2 && (
+              <OpportunityCompare posts={compared} onClose={() => setCompareIds([])} />
+            )}
             <div className="projects-grid">
               {saved.data.favorites.map((favorite) => {
                 const post =
                   favorite.post && new Date(favorite.post.expiresAt).getTime() > now
                     ? favorite.post
                     : null;
+                // Unavailable placeholders have no type, so they belong to "all types" only.
+                if (shownType && post?.category !== shownType) return null;
                 return (
-                  <article className="panel stack" key={favorite.id}>
+                  <article className="panel stack opportunity-card" key={favorite.id}>
                     {post ? (
                       <>
                         <span className="muted small-text">
@@ -100,6 +146,7 @@ export function OpportunitySavedScreen() {
                             {post.geography}
                           </p>
                         )}
+                        <OpportunityConditions post={post} />
                         <p className="small-text">
                           {post.deadline
                             ? t(
@@ -111,6 +158,39 @@ export function OpportunitySavedScreen() {
                                 'Өтінім беру мерзімін ұйымдастырушыдан нақтылаңыз.',
                               )}
                         </p>
+                        {post.deadline && new Date(post.deadline).getTime() > now && (
+                          <OpportunityDeadlineReminder
+                            favoriteId={favorite.id}
+                            current={favorite.reminderDaysBefore}
+                            saved={saved}
+                          />
+                        )}
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={compareIds.includes(favorite.itemId)}
+                            disabled={
+                              !compareIds.includes(favorite.itemId) &&
+                              (compared.length >= 3 ||
+                                (compareCategory !== undefined &&
+                                  post.category !== compareCategory))
+                            }
+                            onChange={(event) =>
+                              setCompareIds((current) =>
+                                event.target.checked
+                                  ? [...current, favorite.itemId]
+                                  : current.filter((itemId) => itemId !== favorite.itemId),
+                              )
+                            }
+                          />
+                          {t('Сравнить', 'Салыстыру')}
+                        </label>
+                        <Link
+                          className="button secondary"
+                          href={`/opportunities/${encodeURIComponent(post.id)}?from=${encodeURIComponent('/opportunities/saved')}`}
+                        >
+                          {t('Подробнее', 'Толығырақ')}
+                        </Link>
                         <a
                           className="text-link"
                           href={post.url}
@@ -131,6 +211,11 @@ export function OpportunitySavedScreen() {
                         </p>
                       </>
                     )}
+                    <OpportunityFavoriteNote
+                      favoriteId={favorite.id}
+                      current={favorite.note}
+                      saved={saved}
+                    />
                     <OpportunityFavoriteButton itemId={favorite.itemId} saved={saved} />
                   </article>
                 );
@@ -164,6 +249,9 @@ export function OpportunitySavedScreen() {
                     search.filters.category && opportunityCategoryLabels[search.filters.category],
                     search.filters.specialty && specialtyLabels[search.filters.specialty],
                     search.filters.geography,
+                    search.filters.workMode && conditionLabels.workMode[search.filters.workMode],
+                    search.filters.payStatus && conditionLabels.payStatus[search.filters.payStatus],
+                    search.filters.kazakhstanEligible && conditionLabels.kazakhstanEligible,
                   ]
                     .filter(Boolean)
                     .join(' · ') || t('Все возможности', 'Барлық мүмкіндік');

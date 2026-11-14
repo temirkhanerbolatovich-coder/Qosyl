@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
 import {
   localizedOpportunityCategoryLabels,
+  localizedOpportunityConditionLabels,
   localizedSpecialtyLabels,
 } from '@/lib/localized-opportunity-labels';
 import type { SavedOpportunityFilters } from '@/lib/opportunity-saved';
@@ -89,12 +90,16 @@ export function SaveOpportunitySearch({
   const { locale, t } = useI18n();
   const opportunityCategoryLabels = localizedOpportunityCategoryLabels(locale);
   const specialtyLabels = localizedSpecialtyLabels(locale);
+  const conditionLabels = localizedOpportunityConditionLabels(locale);
   const description =
     [
       filters.q && `«${filters.q}»`,
       filters.category && opportunityCategoryLabels[filters.category],
       filters.specialty && specialtyLabels[filters.specialty],
       filters.geography,
+      filters.workMode && conditionLabels.workMode[filters.workMode],
+      filters.payStatus && conditionLabels.payStatus[filters.payStatus],
+      filters.kazakhstanEligible && conditionLabels.kazakhstanEligible,
     ]
       .filter(Boolean)
       .join(' · ') || t('Все возможности', 'Барлық мүмкіндік');

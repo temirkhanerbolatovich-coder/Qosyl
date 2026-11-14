@@ -254,6 +254,17 @@ export function ContentIntakePanel() {
               category: f.get('category'),
               geography: '',
               language: 'ru',
+              workFormat: f.get('workFormat'),
+              kazakhstanEligibility: f.get('kazakhstanEligibility'),
+              workload: f.get('workload'),
+              compensation: f.get('compensation'),
+              workMode: f.get('workMode') || null,
+              payStatus: f.get('payStatus') || null,
+              kazakhstanEligible:
+                f.get('kazakhstanEligible') === '' ? null : f.get('kazakhstanEligible') === 'true',
+              hoursPerWeekMax: f.get('hoursPerWeekMax') ? Number(f.get('hoursPerWeekMax')) : null,
+              noExperience: f.get('noExperience') === '' ? null : f.get('noExperience') === 'true',
+              alsoWorkModes: f.getAll('alsoWorkModes'),
             })
           )
             form.reset();
@@ -296,6 +307,82 @@ export function ContentIntakePanel() {
             <option value="other">{copy('Требует классификации')}</option>
           </select>
         </label>
+        <p className="muted small-text">
+          {copy('Укажите подтверждённые условия. Если данных нет, оставьте поле пустым.')}
+        </p>
+        <div className="form-grid">
+          <label className="field">
+            {copy('Формат участия')} <input name="workFormat" maxLength={160} />
+          </label>
+          <label className="field">
+            {copy('Участие из Казахстана')} <input name="kazakhstanEligibility" maxLength={160} />
+          </label>
+          <label className="field">
+            {copy('Нагрузка и график')} <input name="workload" maxLength={160} />
+          </label>
+          <label className="field">
+            {copy('Оплата')} <input name="compensation" maxLength={160} />
+          </label>
+        </div>
+        <p className="muted small-text">
+          {copy(
+            'Для фильтров выбирайте только подтверждённые признаки, соответствующие текстовым условиям.',
+          )}
+        </p>
+        <div className="form-grid">
+          <label className="field">
+            {copy('Формат для фильтра')}
+            <select name="workMode" defaultValue="">
+              <option value="">{copy('Неизвестно')}</option>
+              <option value="remote">{copy('Удалённо')}</option>
+              <option value="in_person">{copy('Очно')}</option>
+              <option value="hybrid">{copy('Гибридно')}</option>
+            </select>
+          </label>
+          <label className="field">
+            {copy('Оплата для фильтра')}
+            <select name="payStatus" defaultValue="">
+              <option value="">{copy('Неизвестно')}</option>
+              <option value="paid">{copy('Оплачивается')}</option>
+              <option value="unpaid">{copy('Без оплаты')}</option>
+            </select>
+          </label>
+          <label className="field">
+            {copy('Принимают из Казахстана')}
+            <select name="kazakhstanEligible" defaultValue="">
+              <option value="">{copy('Неизвестно')}</option>
+              <option value="true">{copy('Да')}</option>
+              <option value="false">{copy('Нет')}</option>
+            </select>
+          </label>
+          <label className="field">
+            {copy('Часов в неделю, максимум')}
+            <input name="hoursPerWeekMax" type="number" min={1} max={60} />
+          </label>
+          <label className="field">
+            {copy('Опыт не требуется')}
+            <select name="noExperience" defaultValue="">
+              <option value="">{copy('Неизвестно')}</option>
+              <option value="true">{copy('Да')}</option>
+              <option value="false">{copy('Нет')}</option>
+            </select>
+          </label>
+        </div>
+        <fieldset className="field">
+          <legend>{copy('Также доступно в формате')}</legend>
+          {(
+            [
+              ['remote', 'Удалённо'],
+              ['in_person', 'Очно'],
+              ['hybrid', 'Гибридно'],
+            ] as const
+          ).map(([mode, label]) => (
+            <label className="checkbox-row" key={mode}>
+              <input type="checkbox" name="alsoWorkModes" value={mode} />
+              {copy(label)}
+            </label>
+          ))}
+        </fieldset>
         <button
           className="button"
           disabled={

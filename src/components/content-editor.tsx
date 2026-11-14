@@ -129,6 +129,60 @@ export function ContentEditor({
   const second =
     detail.history.find((revision) => revision.id === right) ?? detail.history[1] ?? first;
   const terminal = ['rejected', 'archived', 'withdrawn'].includes(detail.item.status);
+  const filterValues = (revision: ContentDetailData['history'][number]) => [
+    [
+      copy('Формат для фильтра'),
+      revision.workMode === 'remote'
+        ? copy('Удалённо')
+        : revision.workMode === 'in_person'
+          ? copy('Очно')
+          : revision.workMode === 'hybrid'
+            ? copy('Гибридно')
+            : copy('Неизвестно'),
+    ],
+    [
+      copy('Оплата для фильтра'),
+      revision.payStatus === 'paid'
+        ? copy('Оплачивается')
+        : revision.payStatus === 'unpaid'
+          ? copy('Без оплаты')
+          : copy('Неизвестно'),
+    ],
+    [
+      copy('Принимают из Казахстана'),
+      revision.kazakhstanEligible == null
+        ? copy('Неизвестно')
+        : revision.kazakhstanEligible
+          ? copy('Да')
+          : copy('Нет'),
+    ],
+    [
+      copy('Дополнительные форматы'),
+      revision.alsoWorkModes.length
+        ? revision.alsoWorkModes
+            .map((mode) =>
+              mode === 'remote'
+                ? copy('Удалённо')
+                : mode === 'in_person'
+                  ? copy('Очно')
+                  : copy('Гибридно'),
+            )
+            .join(', ')
+        : copy('Нет'),
+    ],
+    [
+      copy('Часов в неделю, максимум'),
+      revision.hoursPerWeekMax ? String(revision.hoursPerWeekMax) : copy('Неизвестно'),
+    ],
+    [
+      copy('Опыт не требуется'),
+      revision.noExperience == null
+        ? copy('Неизвестно')
+        : revision.noExperience
+          ? copy('Да')
+          : copy('Нет'),
+    ],
+  ];
   return (
     <section
       lang={locale}
@@ -154,6 +208,26 @@ export function ContentEditor({
         {copy('Источник:')} <span lang="und">{detail.source.name}</span>.{' '}
         <span lang="und">{detail.source.rightsNote}</span>
       </p>
+      <div className="form-grid">
+        {[
+          [copy('Формат участия'), latest.workFormat],
+          [copy('Участие из Казахстана'), latest.kazakhstanEligibility],
+          [copy('Нагрузка и график'), latest.workload],
+          [copy('Оплата'), latest.compensation],
+        ].map(([label, value]) => (
+          <p key={label}>
+            <strong>{label}</strong> —{' '}
+            <span lang={value ? 'und' : locale}>{value || copy('Не указано')}</span>
+          </p>
+        ))}
+      </div>
+      <div className="form-grid">
+        {filterValues(latest).map(([label, value]) => (
+          <p key={label}>
+            <strong>{label}</strong> — {value}
+          </p>
+        ))}
+      </div>
       {detail.source.termsUrl && (
         <a href={detail.source.termsUrl} target="_blank" rel="noopener noreferrer">
           {copy('Условия источника')}
@@ -257,6 +331,22 @@ export function ContentEditor({
                 summary: values.get('summary'),
                 category: values.get('category'),
                 geography: values.get('geography'),
+                workFormat: values.get('workFormat'),
+                kazakhstanEligibility: values.get('kazakhstanEligibility'),
+                workload: values.get('workload'),
+                compensation: values.get('compensation'),
+                workMode: values.get('workMode') || null,
+                payStatus: values.get('payStatus') || null,
+                kazakhstanEligible:
+                  values.get('kazakhstanEligible') === ''
+                    ? null
+                    : values.get('kazakhstanEligible') === 'true',
+                hoursPerWeekMax: values.get('hoursPerWeekMax')
+                  ? Number(values.get('hoursPerWeekMax'))
+                  : null,
+                noExperience:
+                  values.get('noExperience') === '' ? null : values.get('noExperience') === 'true',
+                alsoWorkModes: values.getAll('alsoWorkModes'),
                 language: values.get('language'),
                 publishedAt: isoDate(values.get('publishedAt')),
                 deadline: isoDate(values.get('deadline')),
@@ -313,6 +403,113 @@ export function ContentEditor({
               {copy('География')}{' '}
               <input name="geography" maxLength={120} defaultValue={latest.geography} />
             </label>
+            <p className="muted small-text">
+              {copy('Укажите подтверждённые условия. Если данных нет, оставьте поле пустым.')}
+            </p>
+            <div className="form-grid">
+              <label className="field">
+                {copy('Формат участия')}
+                <input name="workFormat" maxLength={160} defaultValue={latest.workFormat ?? ''} />
+              </label>
+              <label className="field">
+                {copy('Участие из Казахстана')}
+                <input
+                  name="kazakhstanEligibility"
+                  maxLength={160}
+                  defaultValue={latest.kazakhstanEligibility ?? ''}
+                />
+              </label>
+              <label className="field">
+                {copy('Нагрузка и график')}
+                <input name="workload" maxLength={160} defaultValue={latest.workload ?? ''} />
+              </label>
+              <label className="field">
+                {copy('Оплата')}
+                <input
+                  name="compensation"
+                  maxLength={160}
+                  defaultValue={latest.compensation ?? ''}
+                />
+              </label>
+            </div>
+            <p className="muted small-text">
+              {copy(
+                'Для фильтров выбирайте только подтверждённые признаки, соответствующие текстовым условиям.',
+              )}
+            </p>
+            <div className="form-grid">
+              <label className="field">
+                {copy('Формат для фильтра')}
+                <select name="workMode" defaultValue={latest.workMode ?? ''}>
+                  <option value="">{copy('Неизвестно')}</option>
+                  <option value="remote">{copy('Удалённо')}</option>
+                  <option value="in_person">{copy('Очно')}</option>
+                  <option value="hybrid">{copy('Гибридно')}</option>
+                </select>
+              </label>
+              <label className="field">
+                {copy('Оплата для фильтра')}
+                <select name="payStatus" defaultValue={latest.payStatus ?? ''}>
+                  <option value="">{copy('Неизвестно')}</option>
+                  <option value="paid">{copy('Оплачивается')}</option>
+                  <option value="unpaid">{copy('Без оплаты')}</option>
+                </select>
+              </label>
+              <label className="field">
+                {copy('Принимают из Казахстана')}
+                <select
+                  name="kazakhstanEligible"
+                  defaultValue={
+                    latest.kazakhstanEligible == null ? '' : String(latest.kazakhstanEligible)
+                  }
+                >
+                  <option value="">{copy('Неизвестно')}</option>
+                  <option value="true">{copy('Да')}</option>
+                  <option value="false">{copy('Нет')}</option>
+                </select>
+              </label>
+              <label className="field">
+                {copy('Часов в неделю, максимум')}
+                <input
+                  name="hoursPerWeekMax"
+                  type="number"
+                  min={1}
+                  max={60}
+                  defaultValue={latest.hoursPerWeekMax ?? ''}
+                />
+              </label>
+              <label className="field">
+                {copy('Опыт не требуется')}
+                <select
+                  name="noExperience"
+                  defaultValue={latest.noExperience == null ? '' : String(latest.noExperience)}
+                >
+                  <option value="">{copy('Неизвестно')}</option>
+                  <option value="true">{copy('Да')}</option>
+                  <option value="false">{copy('Нет')}</option>
+                </select>
+              </label>
+            </div>
+            <fieldset className="field">
+              <legend>{copy('Также доступно в формате')}</legend>
+              {(
+                [
+                  ['remote', 'Удалённо'],
+                  ['in_person', 'Очно'],
+                  ['hybrid', 'Гибридно'],
+                ] as const
+              ).map(([mode, label]) => (
+                <label className="checkbox-row" key={mode}>
+                  <input
+                    type="checkbox"
+                    name="alsoWorkModes"
+                    value={mode}
+                    defaultChecked={latest.alsoWorkModes.includes(mode)}
+                  />
+                  {copy(label)}
+                </label>
+              ))}
+            </fieldset>
             <label className="field">
               {copy('Язык')}{' '}
               <input name="language" maxLength={20} required defaultValue={latest.language} />
@@ -394,6 +591,22 @@ export function ContentEditor({
                     {localizedOpportunityCategoryLabels(locale)[rev.category] ?? rev.category} ·{' '}
                     {rev.geography || copy('География не установлена')} · {rev.language}
                   </p>
+                  {[
+                    [copy('Формат участия'), rev.workFormat],
+                    [copy('Участие из Казахстана'), rev.kazakhstanEligibility],
+                    [copy('Нагрузка и график'), rev.workload],
+                    [copy('Оплата'), rev.compensation],
+                  ].map(([label, value]) => (
+                    <p key={label}>
+                      <strong>{label}</strong> —{' '}
+                      <span lang={value ? 'und' : locale}>{value || copy('Не указано')}</span>
+                    </p>
+                  ))}
+                  {filterValues(rev).map(([label, value]) => (
+                    <p key={label}>
+                      <strong>{label}</strong> — {value}
+                    </p>
+                  ))}
                   <p className="small-text">
                     {rev.canonicalUrl ?? copy('Историческая ссылка не сохранена')}
                   </p>

@@ -166,6 +166,7 @@ test('F06a: synthetic public content keeps its original text and language when U
     'Synthetic public DTO for language verification; no live source was queried.';
   const now = Date.now();
   const fixture = publicContentDataSchema.parse({
+    total: 1,
     posts: [
       {
         id: 'synthetic-f06a-language-publication',
@@ -246,7 +247,8 @@ test('F06a: client header keeps navigation, language controls and project action
     for (const locale of ['ru', 'kk'] as const) {
       await changeLocale(page, locale);
       const menu = page.locator('header button[aria-controls="header-navigation"]');
-      await expect(menu).toHaveCount(0);
+      if (width <= 900) await expect(menu).toBeVisible();
+      else await expect(menu).toBeHidden();
       if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) === 'false')
         await menu.click();
       const action = page.locator('header a[href="/client/projects/new"]');

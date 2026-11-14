@@ -1056,7 +1056,29 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
     await emailForm.locator('input[name="privacyConsent"]').check();
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath('mobile-registration.png'), fullPage: true });
-    await emailForm.getByRole('button', { name: 'Создать аккаунт' }).click();
+    const submit = emailForm.getByRole('button', { name: 'Создать аккаунт' });
+    const register = () =>
+      Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/auth/sign-up/email') &&
+            response.request().method() === 'POST',
+        ),
+        submit.click(),
+      ]);
+    const [registration] = await register();
+    if (registration.status() === 429) {
+      const retrySeconds = Number(registration.headers()['x-retry-after']);
+      expect(retrySeconds).toBeGreaterThanOrEqual(0);
+      expect(retrySeconds).toBeLessThanOrEqual(60);
+      test.slow();
+      await expect(page.getByRole('alert')).toContainText('Слишком много попыток');
+      await delay((retrySeconds + 1) * 1000);
+      const [retry] = await register();
+      expect(retry.ok()).toBe(true);
+    } else {
+      expect(registration.ok()).toBe(true);
+    }
     await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByRole('heading').first()).toBeVisible();
     await assertNoHorizontalOverflow(page);
@@ -1283,7 +1305,7 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
         await page.goto(pathname);
         await expect(page.getByRole('heading').first()).toBeVisible();
         await expect(
-          page.getByRole('link', { name: /^Qosyl\s*Студенческие проекты$/ }),
+          page.getByRole('link', { name: /^Qosyl(?:\s*Возможности для студентов)?$/ }),
         ).toBeVisible();
         await expect(page).toHaveTitle(/Qosyl/);
         await assertNoHorizontalOverflow(page);
@@ -1530,6 +1552,8 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
         .getByRole('button', { name: 'Найти возможности', exact: true })
         .click();
       await expect(panel.locator('article').filter({ hasText: itemTitle })).toBeVisible();
+      const queueFilters = opportunitySearch.getByRole('button', { name: 'Фильтры', exact: true });
+      if (await queueFilters.isVisible()) await queueFilters.click();
       await opportunitySearch.locator('[name="category"]').selectOption('grant');
       await opportunitySearch
         .getByRole('button', { name: 'Найти возможности', exact: true })
@@ -1660,6 +1684,8 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await publicSearch.locator('[name="q"]').fill(itemTitle.toUpperCase());
       await publicSearch.getByRole('button', { name: 'Найти возможности', exact: true }).click();
       await expect(home.getByRole('heading', { name: itemTitle, exact: true })).toBeVisible();
+      const filterToggle = publicSearch.getByRole('button', { name: 'Фильтры', exact: true });
+      if (await filterToggle.isVisible()) await filterToggle.click();
       await publicSearch.locator('[name="category"]').selectOption('grant');
       await publicSearch.getByRole('button', { name: 'Найти возможности', exact: true }).click();
       await expect(home.getByRole('heading', { name: itemTitle, exact: true })).not.toBeVisible();
@@ -1674,7 +1700,7 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       );
       const cta = await home
         .locator('.home-hero')
-        .getByRole('link', { name: 'Найти проект' })
+        .getByRole('button', { name: 'Найти', exact: true })
         .boundingBox();
       const section = await cards.boundingBox();
       expect(section!.y).toBeGreaterThan(cta!.y);
@@ -1689,11 +1715,20 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await editor.getByText('Исправить материал перед публикацией', { exact: true }).click();
       const edit = editor.getByRole('form', { name: 'Редактирование материала' });
       await edit.locator('[name="title"]').fill(`${itemTitle}: уточнено`);
+      await edit.locator('[name="workFormat"]').fill('Удалённо');
+      await edit.locator('[name="kazakhstanEligibility"]').fill('Доступно из Казахстана');
+      await edit.locator('[name="workload"]').fill('15–20 часов в неделю');
+      await edit.locator('[name="compensation"]').fill('Без оплаты');
+      await edit.locator('[name="workMode"]').selectOption('remote');
+      await edit.locator('[name="payStatus"]').selectOption('unpaid');
+      await edit.locator('[name="kazakhstanEligible"]').selectOption('true');
       await edit
         .locator('[name="reason"]')
         .fill('Уточнено название по оригиналу; требуется повторная проверка.');
       await edit.getByRole('button', { name: 'Сохранить новую редакцию' }).click();
       await expect(editor.getByText(/редакция 2/, { exact: false }).first()).toBeVisible();
+      await expect(editor.getByText('Доступно из Казахстана').first()).toBeVisible();
+      await expect(editor.getByText('15–20 часов в неделю').first()).toBeVisible();
       expect((await publicPosts()).some((post) => post.id === itemId)).toBe(false);
       await editor.getByText(/История редакций \(2\)/).click();
       await expect(editor.getByText(`Редакция 1: ${itemTitle}`, { exact: true })).toBeVisible();
@@ -1711,6 +1746,45 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await expect
         .poll(async () => (await publicPosts()).find((post) => post.id === itemId)?.title)
         .toBe(`${itemTitle}: уточнено`);
+      await home.goto('/opportunities?workMode=remote&payStatus=unpaid&kazakhstanEligible=true');
+      await expect(home.locator('[name="workMode"]')).toHaveValue('remote');
+      await expect(home.locator('[name="payStatus"]')).toHaveValue('unpaid');
+      await expect(home.locator('[name="kazakhstanEligible"]')).toHaveValue('true');
+      const approvedCard = home.locator('article').filter({ hasText: `${itemTitle}: уточнено` });
+      await expect(approvedCard.getByText('Удалённо', { exact: true })).toBeVisible();
+      await expect(approvedCard.getByText('Доступно из Казахстана', { exact: true })).toBeVisible();
+      await expect(approvedCard.getByText('15–20 часов в неделю', { exact: true })).toBeVisible();
+      await expect(approvedCard.getByText('Без оплаты', { exact: true })).toBeVisible();
+      await approvedCard.getByRole('link', { name: 'Подробнее', exact: true }).click();
+      await expect(
+        home.getByRole('heading', { name: `${itemTitle}: уточнено`, exact: true }),
+      ).toBeVisible();
+      await expect(home.getByText('15–20 часов в неделю', { exact: true })).toBeVisible();
+      await expect(home.getByRole('link', { name: 'Перейти к организатору' })).toHaveAttribute(
+        'href',
+        `https://example.org/editorial/${run}`,
+      );
+      for (const width of [375, 768, 1440, 1920]) {
+        await home.setViewportSize({ width, height: 1000 });
+        await assertNoHorizontalOverflow(home);
+        await home.screenshot({
+          path: testInfo.outputPath(`opportunity-detail-${width}.png`),
+          fullPage: true,
+        });
+      }
+      const cardLink = approvedCard.getByRole('link', { name: 'Подробнее' });
+      await home.goBack();
+      // Back keeps the card anchor in the URL, which is what restores focus to the card.
+      await expect(home).toHaveURL((url) => url.pathname === '/opportunities');
+      await expect(cardLink).toBeFocused();
+      await cardLink.press('Enter');
+      await expect(home).toHaveURL((url) => url.pathname === `/opportunities/${itemId}`);
+      await home.getByRole('link', { name: 'Вернуться к возможностям' }).click();
+      await expect(home).toHaveURL(
+        (url) =>
+          url.searchParams.get('workMode') === 'remote' && url.hash === `#opportunity-${itemId}`,
+      );
+      await expect(cardLink).toBeFocused();
       const published = await detail(itemId);
       expect(published.item.approvedRevisionId).toBe(published.history[0].id);
       await review.locator('[name="decision"]').selectOption('withdraw');
@@ -1720,8 +1794,12 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await review.getByRole('button', { name: 'Сохранить решение', exact: true }).click();
       await expect.poll(async () => (await detail(itemId)).item.status).toBe('withdrawn');
       expect((await publicPosts()).some((post) => post.id === itemId)).toBe(false);
-      await home.reload();
-      await expect(home.getByRole('region', { name: 'Возможности и события' })).toHaveCount(0);
+      await home.goto(`/opportunities/${itemId}`);
+      await expect(home.getByRole('heading', { name: 'Возможность недоступна' })).toBeVisible();
+      await home.goto('/');
+      await expect(
+        cards.getByRole('heading', { name: `${itemTitle}: уточнено`, exact: true }),
+      ).toHaveCount(0);
       await home.route('**/api/content/posts*', (route) =>
         route.fulfill({
           status: 503,
@@ -1731,9 +1809,11 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       );
       await home.reload();
       await expect(
-        home.locator('.home-hero').getByRole('link', { name: 'Найти проект' }),
+        home.locator('.home-hero').getByRole('button', { name: 'Найти', exact: true }),
       ).toBeVisible();
-      await expect(home.getByRole('region', { name: 'Возможности и события' })).toHaveCount(0);
+      await expect(
+        home.getByRole('alert').getByText('Не удалось загрузить возможности. Повторите позже.'),
+      ).toBeVisible();
     } finally {
       await change('setSourceEnabled', { sourceId: source.sourceId, enabled: false });
       await change('setModuleEnabled', { enabled: before.settings.enabled });
