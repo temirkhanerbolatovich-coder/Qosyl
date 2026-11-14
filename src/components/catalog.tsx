@@ -148,6 +148,26 @@ export function CatalogScreen() {
     router.push(`/projects?${next}`);
     setShowFilters(false);
   }
+  // Presets for the most common asks: a few hours, a near deadline, no experience.
+  const quickPresets: { id: string; key: string; value?: string; label: string }[] = [
+    { id: 'hours', key: 'maxHours', value: '5', label: t('До 5 часов', '5 сағатқа дейін') },
+    { id: 'soon', key: 'dueBefore', label: t('Срок до 3 дней', 'Мерзімі 3 күнге дейін') },
+    {
+      id: 'beginner',
+      key: 'difficulty',
+      value: 'beginner_friendly',
+      label: t('Можно без опыта', 'Тәжірибесіз де болады'),
+    },
+  ];
+  function soonDate() {
+    const day = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    return day.toISOString().slice(0, 10);
+  }
+  function togglePreset(key: string, value: string, active: boolean) {
+    const form = new FormData();
+    form.set(key, active ? '' : value);
+    update(form, true);
+  }
   return (
     <div className="page-shell" lang={locale}>
       <PageHeading
@@ -180,6 +200,27 @@ export function CatalogScreen() {
           {t('Найти', 'Іздеу')}
         </button>
       </form>
+      <div
+        className="quick-filters"
+        role="group"
+        aria-label={t('Быстрые фильтры', 'Жылдам сүзгілер')}
+      >
+        {quickPresets.map((preset) => {
+          const active =
+            params.has(preset.key) && (!preset.value || params.get(preset.key) === preset.value);
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              className="category-chip"
+              aria-pressed={active}
+              onClick={() => togglePreset(preset.key, preset.value ?? soonDate(), active)}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
       <div className="catalog-layout">
         <button
           className="button secondary mobile-filter-toggle"

@@ -28,6 +28,7 @@ export function OpportunitySavedScreen() {
   const [now, setNow] = useState(() => Date.now());
   const [typeFilter, setTypeFilter] = useState('');
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [showCompare, setShowCompare] = useState(false);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -110,14 +111,48 @@ export function OpportunitySavedScreen() {
                 </select>
               </label>
             )}
-            <p className="muted small-text">
-              {t(
-                'Чтобы сравнить, отметьте от 2 до 3 возможностей одного типа.',
-                'Салыстыру үшін бір түрдегі 2–3 мүмкіндікті белгілеңіз.',
-              )}
-            </p>
-            {compared.length >= 2 && (
-              <OpportunityCompare posts={compared} onClose={() => setCompareIds([])} />
+            {compareIds.length === 0 ? (
+              <p className="muted small-text">
+                {t(
+                  'Чтобы сравнить, отметьте от 2 до 3 возможностей одного типа.',
+                  'Салыстыру үшін бір түрдегі 2–3 мүмкіндікті белгілеңіз.',
+                )}
+              </p>
+            ) : (
+              <div className="compare-bar" role="group" aria-label={t('Сравнение', 'Салыстыру')}>
+                <span>
+                  {t(`Выбрано: ${compared.length} из 3`, `Таңдалды: ${compared.length} / 3`)}
+                </span>
+                <button
+                  type="button"
+                  className="button small"
+                  disabled={compared.length < 2}
+                  aria-expanded={showCompare && compared.length >= 2}
+                  aria-controls="opportunity-compare"
+                  onClick={() => setShowCompare(true)}
+                >
+                  {t(`Сравнить (${compared.length})`, `Салыстыру (${compared.length})`)}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary small"
+                  onClick={() => {
+                    setCompareIds([]);
+                    setShowCompare(false);
+                  }}
+                >
+                  {t('Снять выбор', 'Таңдауды алу')}
+                </button>
+              </div>
+            )}
+            {showCompare && compared.length >= 2 && (
+              <OpportunityCompare
+                posts={compared}
+                onClose={() => {
+                  setCompareIds([]);
+                  setShowCompare(false);
+                }}
+              />
             )}
             <div className="projects-grid">
               {saved.data.favorites.map((favorite) => {
@@ -159,13 +194,6 @@ export function OpportunitySavedScreen() {
                                 'Өтінім беру мерзімін ұйымдастырушыдан нақтылаңыз.',
                               )}
                         </p>
-                        {post.deadline && new Date(post.deadline).getTime() > now && (
-                          <OpportunityDeadlineReminder
-                            favoriteId={favorite.id}
-                            current={favorite.reminderDaysBefore}
-                            saved={saved}
-                          />
-                        )}
                         <label className="checkbox-row">
                           <input
                             type="checkbox"
@@ -212,12 +240,42 @@ export function OpportunitySavedScreen() {
                         </p>
                       </>
                     )}
-                    <OpportunityFavoriteNote
-                      favoriteId={favorite.id}
-                      current={favorite.note}
-                      saved={saved}
-                    />
-                    <OpportunityFavoriteButton itemId={favorite.itemId} saved={saved} />
+                    {/* Note and reminder stay one tap away; the summary says what is already set. */}
+                    <details className="favorite-extras">
+                      <summary>
+                        {t('Заметка и напоминание', 'Жазба және еске салу')}
+                        {(favorite.note || favorite.reminderDaysBefore) && (
+                          <span className="muted small-text">
+                            {' · '}
+                            {[
+                              favorite.note && t('есть заметка', 'жазба бар'),
+                              favorite.reminderDaysBefore &&
+                                t(
+                                  `напоминание за ${favorite.reminderDaysBefore} дн.`,
+                                  `${favorite.reminderDaysBefore} күн бұрын еске салу`,
+                                ),
+                            ]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </span>
+                        )}
+                      </summary>
+                      <div className="stack">
+                        {post?.deadline && new Date(post.deadline).getTime() > now && (
+                          <OpportunityDeadlineReminder
+                            favoriteId={favorite.id}
+                            current={favorite.reminderDaysBefore}
+                            saved={saved}
+                          />
+                        )}
+                        <OpportunityFavoriteNote
+                          favoriteId={favorite.id}
+                          current={favorite.note}
+                          saved={saved}
+                        />
+                      </div>
+                    </details>
+                    <OpportunityFavoriteButton itemId={favorite.itemId} saved={saved} compact />
                   </article>
                 );
               })}

@@ -78,6 +78,7 @@ test('removing a favorite offers undo that restores its note and reminder', asyn
   await toast.getByRole('button', { name: 'Отменить' }).click();
   await expect(page.locator('.toast').filter({ hasText: 'Действие отменено.' })).toBeVisible();
   await expect(card).toBeVisible();
+  await card.getByText('Заметка и напоминание').click();
   await expect(card.getByLabel('Моя заметка')).toHaveValue('Подготовить портфолио');
   await expect(card.getByLabel('Напомнить о сроке подачи')).toHaveValue('3');
   expect(commands.map((command) => command.action)).toEqual([

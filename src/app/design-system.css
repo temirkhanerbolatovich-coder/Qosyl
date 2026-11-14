@@ -967,6 +967,10 @@ select {
 .qosyl-header-actions .theme-switch {
   flex: none;
 }
+/* The selects carry their own accessible names; the visible "Тема" and "Язык" only cost width. */
+.qosyl-header-actions .theme-switch > span {
+  display: none;
+}
 .qosyl-header-actions .theme-switch select {
   width: 120px;
   max-width: none;
@@ -1124,6 +1128,7 @@ select {
   .opportunity-filter-details[data-open='true'] .opportunity-sheet-footer {
     position: sticky;
     bottom: 0;
+    z-index: 2;
     display: grid;
     gap: var(--space-8);
     margin-inline: calc(-1 * var(--space-16));
@@ -1282,6 +1287,62 @@ select {
 }
 .opportunity-list .opportunity-card {
   gap: var(--space-8);
+}
+.quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-block: var(--space-12);
+}
+.quick-filters .category-chip {
+  min-height: 44px;
+  cursor: pointer;
+}
+.quick-filters .category-chip[aria-pressed='true'] {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--action-foreground);
+}
+/* Pilot banner: one line on a phone. Demo items keep their own «ДЕМО» label and
+   the payment rule stays on the projects page and in the terms. */
+@media (max-width: 640px) {
+  .pilot-banner {
+    flex-wrap: nowrap;
+    padding-block: 6px;
+  }
+  .pilot-banner .banner-detail {
+    display: none;
+  }
+}
+/* Favorites: a compare bar, and note and reminder in a disclosure on each card. */
+.compare-bar {
+  position: sticky;
+  top: var(--space-8);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  background: var(--surface-elevated);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-medium);
+}
+.favorite-extras summary {
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.favorite-extras[open] summary {
+  margin-bottom: var(--space-8);
+}
+/* Home: the newest three side by side on a wide screen. */
+.opportunity-list-home {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 }
 .opportunity-results-bar {
   display: flex;
@@ -1484,6 +1545,72 @@ select {
     display: block;
     color: var(--muted);
     font-size: 0.85rem;
+  }
+}
+/* Opportunity page: key facts first, then the actions, then the description. */
+.detail {
+  max-width: 48rem;
+}
+.detail h1 {
+  margin: 0;
+}
+.detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: var(--space-12) var(--space-24);
+  margin: 0;
+  padding: var(--space-16);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-large);
+}
+.detail-facts div {
+  min-width: 0;
+}
+.detail-facts dt {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.detail-facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12);
+}
+/* On a phone the actions are a bar at the bottom, so the way out stays within reach while reading. */
+@media (max-width: 800px) {
+  .detail-page {
+    padding-bottom: 6rem;
+  }
+  .detail-actions {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    flex-wrap: nowrap;
+    padding: var(--space-12) var(--space-16)
+      calc(var(--space-12) + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px var(--shadow-color);
+  }
+  .detail-actions .button {
+    flex: 1;
+    min-width: 0;
+  }
+  .detail-actions .button:first-child {
+    flex: 2;
+  }
+  body:has(.detail-actions) .toast-region {
+    bottom: calc(5rem + var(--space-8));
+  }
+  body:has(.detail-actions) footer {
+    padding-bottom: 5rem;
   }
 }
 .opportunity-similar {

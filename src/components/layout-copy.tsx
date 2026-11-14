@@ -39,11 +39,13 @@ export function PilotBanner() {
     <div className="pilot-banner" lang={locale}>
       <span className="pilot-dot" />
       {t('Локальный пилот 18+', 'Жергілікті пилот 18+')}
-      <span className="banner-separator">/</span>
-      {t(
-        'Примеры отмечены «ДЕМО». Оплата — вне платформы.',
-        'Мысалдар «ДЕМО» деп белгіленген. Төлем платформадан тыс жүргізіледі.',
-      )}
+      <span className="banner-detail">
+        <span className="banner-separator">/</span>
+        {t(
+          'Примеры отмечены «ДЕМО». Оплата — вне платформы.',
+          'Мысалдар «ДЕМО» деп белгіленген. Төлем платформадан тыс жүргізіледі.',
+        )}
+      </span>
     </div>
   );
 }

@@ -1553,10 +1553,15 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
         .click();
       await expect(panel.locator('article').filter({ hasText: itemTitle })).toBeVisible();
       const queueFilters = opportunitySearch.getByRole('button', { name: 'Фильтры', exact: true });
-      if (await queueFilters.isVisible()) await queueFilters.click();
+      // On a phone the filters are a sheet that applies with its own "Показать" button.
+      const queueSheet = await queueFilters.isVisible();
+      if (queueSheet) await queueFilters.click();
       await opportunitySearch.locator('[name="category"]').selectOption('grant');
       await opportunitySearch
-        .getByRole('button', { name: 'Найти возможности', exact: true })
+        .getByRole(
+          'button',
+          queueSheet ? { name: /^Показать/ } : { name: 'Найти возможности', exact: true },
+        )
         .click();
       await expect(panel.getByRole('heading', { name: 'Материалы: 0', exact: true })).toBeVisible();
       await opportunitySearch.locator('[name="category"]').selectOption('');
@@ -1685,9 +1690,15 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
       await publicSearch.getByRole('button', { name: 'Найти возможности', exact: true }).click();
       await expect(home.getByRole('heading', { name: itemTitle, exact: true })).toBeVisible();
       const filterToggle = publicSearch.getByRole('button', { name: 'Фильтры', exact: true });
-      if (await filterToggle.isVisible()) await filterToggle.click();
+      const phoneSheet = await filterToggle.isVisible();
+      if (phoneSheet) await filterToggle.click();
       await publicSearch.locator('[name="category"]').selectOption('grant');
-      await publicSearch.getByRole('button', { name: 'Найти возможности', exact: true }).click();
+      await publicSearch
+        .getByRole(
+          'button',
+          phoneSheet ? { name: /^Показать/ } : { name: 'Найти возможности', exact: true },
+        )
+        .click();
       await expect(home.getByRole('heading', { name: itemTitle, exact: true })).not.toBeVisible();
       await assertNoHorizontalOverflow(home);
       await home.goto('/');

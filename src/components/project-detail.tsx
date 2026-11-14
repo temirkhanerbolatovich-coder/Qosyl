@@ -157,6 +157,25 @@ export function ProjectDetailScreen({ id }: { id: string }) {
               <CalendarDays size={15} /> {copy('До')} {date(p.dueAt, false, locale)}
             </span>
           </div>
+          {/* Money, payment rule and verification before the long text, not after it. */}
+          <dl className="detail-facts project-terms">
+            <div>
+              <dt>{copy('Бюджет')}</dt>
+              <dd>{money(p.budgetKzt, locale)}</dd>
+            </div>
+            <div>
+              <dt>{copy('Оплата')}</dt>
+              <dd>{copy('Напрямую между участниками, вне платформы')}</dd>
+            </div>
+            <div>
+              <dt>{copy('Заказчик')}</dt>
+              <dd>
+                {p.client?.clientProfile?.verificationStatus === 'verified'
+                  ? copy('Проверен модератором')
+                  : copy('Проверка организации не завершена')}
+              </dd>
+            </div>
+          </dl>
           {p.demo && (
             <div className="alert warning">
               <Info size={18} />

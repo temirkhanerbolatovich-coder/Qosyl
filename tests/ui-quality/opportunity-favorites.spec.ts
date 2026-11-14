@@ -67,6 +67,9 @@ test('favorites can be filtered by type and carry a private note', async ({ page
   await expect(cards).toHaveCount(3);
 
   const grant = cards.filter({ hasText: 'Карточка grant-one' });
+  // Note and reminder sit in a disclosure; the summary already says a note exists.
+  await expect(grant.getByText('есть заметка')).toBeVisible();
+  await grant.getByText('Заметка и напоминание').click();
   const field = grant.getByLabel('Моя заметка');
   await expect(field).toHaveValue('Подготовить портфолио');
   await expect(grant.getByRole('button', { name: 'Сохранить заметку' })).toBeDisabled();
@@ -130,6 +133,10 @@ test('two or three favorites of one type can be compared side by side', async ({
   await expect(grant).toBeDisabled();
   await expect(page.getByRole('region', { name: 'Сравнение возможностей' })).toHaveCount(0);
   await two.check();
+  // Selection alone does not open the table; the explicit button does.
+  await expect(page.getByRole('region', { name: 'Сравнение возможностей' })).toHaveCount(0);
+  await expect(page.getByText('Выбрано: 2 из 3')).toBeVisible();
+  await page.getByRole('button', { name: 'Сравнить (2)' }).click();
   const compare = page.getByRole('region', { name: 'Сравнение возможностей' });
   const table = compare.getByRole('table', { name: 'Сравнение выбранных возможностей' });
   await expect(table.getByRole('columnheader', { name: 'Карточка internship-one' })).toBeVisible();

@@ -17,7 +17,7 @@ type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify';
 const titles: Record<Mode, { title: string; description: string; submit: string }> = {
   login: {
     title: 'С возвращением',
-    description: 'Продолжите работу над заказами и своим портфолио.',
+    description: 'Войдите, чтобы вернуться к избранному, сохранённым поискам и своим проектам.',
     submit: 'Войти',
   },
   register: {

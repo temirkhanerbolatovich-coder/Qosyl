@@ -39,6 +39,8 @@ import {
 } from './opportunity-saved-controls';
 
 const pageSize = 6;
+// The home page only teases the newest few; the catalogue shows a full page.
+const homeCount = 3;
 const resultsAnchor = 'opportunity-results';
 
 export function Opportunities({
@@ -123,7 +125,7 @@ export function Opportunities({
       const currentRequest = ++requestNumber;
       try {
         const response = await fetch(
-          `/api/content/posts?limit=${pageSize}&page=${page}&sort=${sort}${added ? `&added=${added}` : ''}${deadline ? `&deadline=${deadline}` : ''}${hours ? `&hours=${hours}` : ''}${noExperience ? '&noExperience=true' : ''}${catalogue ? '&facets=true' : ''}${query ? `&${query}` : ''}`,
+          `/api/content/posts?limit=${catalogue ? pageSize : homeCount}&page=${page}&sort=${sort}${added ? `&added=${added}` : ''}${deadline ? `&deadline=${deadline}` : ''}${hours ? `&hours=${hours}` : ''}${noExperience ? '&noExperience=true' : ''}${catalogue ? '&facets=true' : ''}${query ? `&${query}` : ''}`,
           {
             cache: 'no-store',
             signal: AbortSignal.timeout(10000),
@@ -249,11 +251,7 @@ export function Opportunities({
                   }
                 }}
               />
-            ) : (
-              <Link className="text-link" href="/opportunities">
-                {t('Все возможности и поиск →', 'Барлық мүмкіндік және іздеу →')}
-              </Link>
-            )}
+            ) : null}
             {catalogue &&
               (saved.signedIn ? (
                 <>
@@ -453,7 +451,7 @@ export function Opportunities({
                 </ul>
               )}
             <div
-              className={`${catalogue ? 'opportunity-list' : 'projects-grid'}${
+              className={`opportunity-list${catalogue ? '' : ' opportunity-list-home'}${
                 loading && posts.length > 0 ? ' is-updating' : ''
               }`}
               aria-busy={loading}
@@ -537,6 +535,11 @@ export function Opportunities({
                 </article>
               ))}
             </div>
+            {!catalogue && (
+              <Link className="button secondary" href="/opportunities">
+                {t('Все возможности и поиск →', 'Барлық мүмкіндік және іздеу →')}
+              </Link>
+            )}
             {catalogue && (
               <div className="button-row">
                 <button

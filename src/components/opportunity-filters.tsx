@@ -100,7 +100,7 @@ export function OpportunityFilters({
       }
     setResets((count) => count + 1);
     setDraftCount(null);
-    if (collapseOnMobile) setFiltersOpen(false);
+    if (collapseOnMobile || narrow) setFiltersOpen(false);
     onSearch('');
   }
   function closeSheet() {
@@ -172,7 +172,7 @@ export function OpportunityFilters({
         const params = new URLSearchParams();
         for (const [key, value] of fields)
           if (String(value).trim()) params.set(key, String(value).trim());
-        if (collapseOnMobile) setFiltersOpen(false);
+        if (collapseOnMobile || narrow) setFiltersOpen(false);
         rememberSearch(params.get('q') ?? '');
         onSearch(params.toString());
       }}
