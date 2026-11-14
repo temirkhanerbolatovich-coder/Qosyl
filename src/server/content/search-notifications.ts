@@ -89,6 +89,9 @@ export async function runOpportunitySearchNotifications(
             if (search.user.status === 'active' && (!search.user.demo || config.demoEnabled)) {
               const filters = normalizeOpportunityFilters({
                 q: search.q,
+                ...(search.workMode ? { workMode: search.workMode } : {}),
+                ...(search.payStatus ? { payStatus: search.payStatus } : {}),
+                ...(search.kazakhstanEligible ? { kazakhstanEligible: 'true' } : {}),
                 geography: search.geography,
                 ...(search.category ? { category: search.category } : {}),
                 ...(search.specialty ? { specialty: search.specialty } : {}),

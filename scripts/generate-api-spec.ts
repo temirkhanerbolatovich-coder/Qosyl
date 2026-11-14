@@ -1176,12 +1176,23 @@ export function buildApiSpec() {
           summary: 'Read up to six approved and current opportunities',
           security: [],
           description:
-            'Public, read-only, private/no-store. Returns an empty posts array when module is disabled or no material qualifies. Only published items of enabled sources with unexpired explicit approval are included. Reads the approved immutable snapshot, never pending revisions, audit, rights notes, hashes or runs. No remote requests. Stable order: approvedAt descending, id descending. Errors do not prevent the marketplace homepage from rendering.',
+            'Public, read-only, private/no-store. Returns the current page and total matches across pages, or zero matches when the module is disabled. Only published items of enabled sources with unexpired explicit approval are included. Reads the approved immutable snapshot, never pending revisions, audit, rights notes, hashes or runs. No remote requests. Errors do not prevent the marketplace homepage from rendering.',
           parameters: [
             {
               name: 'page',
               in: 'query',
               schema: { type: 'integer', minimum: 1, maximum: 10000, default: 1 },
+            },
+            {
+              name: 'sort',
+              in: 'query',
+              schema: {
+                type: 'string',
+                enum: ['newest', 'deadline', 'relevance'],
+                default: 'newest',
+              },
+              description:
+                'Newest uses Qosyl approval time descending. Deadline uses application deadline ascending with unknown dates last. Relevance ranks an exact title, then a title match, then a summary match (synonyms included) and needs `q`; without `q` it behaves like newest. Ties use ID descending.',
             },
             {
               name: 'q',
@@ -1218,7 +1229,58 @@ export function buildApiSpec() {
               },
               description: 'Keyword heuristic; not an eligibility decision.',
             },
-
+            {
+              name: 'workMode',
+              in: 'query',
+              schema: { type: 'string', enum: ['remote', 'in_person', 'hybrid'] },
+              description: 'Editor-confirmed participation format; unknown values never match.',
+            },
+            {
+              name: 'payStatus',
+              in: 'query',
+              schema: { type: 'string', enum: ['paid', 'unpaid'] },
+              description: 'Editor-confirmed pay status; unknown values never match.',
+            },
+            {
+              name: 'kazakhstanEligible',
+              in: 'query',
+              schema: { type: 'string', enum: ['true'] },
+              description:
+                'Only opportunities with editor-confirmed participation from Kazakhstan.',
+            },
+            {
+              name: 'added',
+              in: 'query',
+              schema: { type: 'string', enum: ['7', '30'] },
+              description: 'Only items published in Qosyl within the last 7 or 30 days.',
+            },
+            {
+              name: 'deadline',
+              in: 'query',
+              schema: { type: 'string', enum: ['7', '30'] },
+              description:
+                'Only items with a confirmed application deadline within the next 7 or 30 days. Items without a date never match.',
+            },
+            {
+              name: 'hours',
+              in: 'query',
+              schema: { type: 'string', enum: ['10', '20', '30'] },
+              description:
+                'Only items with a confirmed weekly-hours ceiling at or below this value. Unknown hours never match.',
+            },
+            {
+              name: 'noExperience',
+              in: 'query',
+              schema: { type: 'string', enum: ['true'] },
+              description: 'Only items where the editor confirmed that no experience is required.',
+            },
+            {
+              name: 'facets',
+              in: 'query',
+              schema: { type: 'string', enum: ['true'] },
+              description:
+                'Adds per-value result counts. Each group ignores its own filter. When nothing matches, `relaxed` gives the result count after removing each applied filter.',
+            },
             {
               name: 'limit',
               in: 'query',
@@ -1230,7 +1292,7 @@ export function buildApiSpec() {
             '200': successResponse(
               'Approved public projection only.',
               schemaRef('PublicContentResponse'),
-              { empty: { value: { data: { posts: [] } } } },
+              { empty: { value: { data: { posts: [], total: 0 } } } },
             ),
             '400': errors['400'],
             '500': errors['500'],

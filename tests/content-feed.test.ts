@@ -144,6 +144,58 @@ describe('RSS and Atom normalization', () => {
     expect(first.contentHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  describe('decision fields', () => {
+    const normalize = (fields: Record<string, unknown>) =>
+      normalizeContentItem(
+        { url: '/internship', title: 'Student internship', category: 'internship', ...fields },
+        base,
+        host,
+      );
+    it('stores confirmed hours, experience and extra formats and keeps unknown ones empty', () => {
+      const known = normalize({
+        workMode: 'remote',
+        alsoWorkModes: ['hybrid', 'hybrid'],
+        hoursPerWeekMax: 20,
+        noExperience: true,
+        workload: '15–20 часов в неделю',
+      });
+      expect(known).toMatchObject({
+        hoursPerWeekMax: 20,
+        noExperience: true,
+        alsoWorkModes: ['hybrid'],
+      });
+      expect(normalize({})).toMatchObject({
+        hoursPerWeekMax: null,
+        noExperience: null,
+        alsoWorkModes: [],
+      });
+    });
+    it('changes the content hash only when a decision field is set', () => {
+      const plain = normalize({});
+      expect(normalize({ alsoWorkModes: [] }).contentHash).toBe(plain.contentHash);
+      expect(normalize({ hoursPerWeekMax: 10 }).contentHash).not.toBe(plain.contentHash);
+      expect(normalize({ noExperience: false }).contentHash).not.toBe(plain.contentHash);
+      expect(normalize({ workMode: 'remote', alsoWorkModes: ['hybrid'] }).contentHash).not.toBe(
+        normalize({ workMode: 'remote' }).contentHash,
+      );
+    });
+    it('rejects values the catalogue could not trust', () => {
+      for (const fields of [
+        { hoursPerWeekMax: 0 },
+        { hoursPerWeekMax: 61 },
+        { hoursPerWeekMax: 7.5 },
+        // Extra formats need a main format, must differ from it and be real modes.
+        { alsoWorkModes: ['remote'] },
+        { workMode: 'remote', alsoWorkModes: ['remote'] },
+        { workMode: 'remote', alsoWorkModes: ['moon'] },
+        { workMode: 'remote', alsoWorkModes: ['hybrid', 'in_person', 'remote'] },
+        // The hours ceiling must not contradict the stated weekly hours.
+        { hoursPerWeekMax: 10, workload: '15–20 часов в неделю' },
+      ])
+        expect(() => normalize(fields), JSON.stringify(fields)).toThrow(ContentFeedError);
+    });
+  });
+
   it('bounds item text and caps score within 0..100', () => {
     const result = normalizeContentItem(
       {

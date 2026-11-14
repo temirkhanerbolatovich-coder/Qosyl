@@ -1,0 +1,4 @@
+ALTER TABLE "ContentRevision" ADD COLUMN "workMode" TEXT, ADD COLUMN "payStatus" TEXT, ADD COLUMN "kazakhstanEligible" BOOLEAN;
+ALTER TABLE "SavedOpportunitySearch" ADD COLUMN "workMode" TEXT, ADD COLUMN "payStatus" TEXT, ADD COLUMN "kazakhstanEligible" BOOLEAN;
+ALTER TABLE "ContentRevision" ADD CONSTRAINT "ContentRevision_workMode_check" CHECK ("workMode" IS NULL OR "workMode" IN ('remote', 'in_person', 'hybrid')), ADD CONSTRAINT "ContentRevision_payStatus_check" CHECK ("payStatus" IS NULL OR "payStatus" IN ('paid', 'unpaid'));
+ALTER TABLE "SavedOpportunitySearch" ADD CONSTRAINT "SavedOpportunitySearch_workMode_check" CHECK ("workMode" IS NULL OR "workMode" IN ('remote', 'in_person', 'hybrid')), ADD CONSTRAINT "SavedOpportunitySearch_payStatus_check" CHECK ("payStatus" IS NULL OR "payStatus" IN ('paid', 'unpaid'));

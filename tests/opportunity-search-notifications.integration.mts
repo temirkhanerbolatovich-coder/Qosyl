@@ -72,6 +72,9 @@ test(
           summary?: string;
           category?: string;
           geography?: string;
+          workMode?: string;
+          payStatus?: string;
+          kazakhstanEligible?: boolean;
           approvedAt?: Date;
           expiresAt?: Date;
           status?: string;
@@ -92,6 +95,9 @@ test(
             summary: options.summary ?? 'Synthetic public opportunity only.',
             category: options.category ?? 'grant',
             geography: options.geography ?? 'ҚАЗАҚСТАН АСТАНА',
+            workMode: options.workMode,
+            payStatus: options.payStatus,
+            kazakhstanEligible: options.kazakhstanEligible,
             language: 'ru',
             score: 50,
             contentHash: hash(id),
@@ -114,6 +120,55 @@ test(
       return { owner, source, search, marker, material, run, notices };
     }
     try {
+      await t.test(
+        'confirmed filters persist and notification delivery excludes unknown and contrary values',
+        async () => {
+          const f = await fixture();
+          await mutateOpportunitySaves(db, f.owner, {
+            action: 'saveSearch',
+            name: 'Confirmed conditions',
+            filters: {
+              q: f.marker,
+              workMode: 'remote',
+              payStatus: 'paid',
+              kazakhstanEligible: 'true',
+            },
+          });
+          const saved = await db.savedOpportunitySearch.findFirstOrThrow({
+            where: { userId: f.owner.id, name: 'Confirmed conditions' },
+          });
+          assert.equal(saved.workMode, 'remote');
+          assert.equal(saved.payStatus, 'paid');
+          assert.equal(saved.kazakhstanEligible, true);
+          await db.savedOpportunitySearch.update({
+            where: { id: saved.id },
+            data: {
+              notificationFrequency: 'daily',
+              notificationSince: at(-2),
+              nextNotificationAt: now,
+            },
+          });
+          const matching = await f.material({
+            workMode: 'remote',
+            payStatus: 'paid',
+            kazakhstanEligible: true,
+          });
+          await f.material();
+          await f.material({ workMode: 'remote', payStatus: 'paid', kazakhstanEligible: false });
+          const result = await runOpportunitySearchNotifications(db, {
+            now,
+            searchIds: [saved.id],
+          });
+          assert.equal(result.matchesRecorded, 1);
+          const match = await db.opportunitySearchMatch.findFirstOrThrow({
+            where: { searchId: saved.id },
+          });
+          assert.equal(match.itemId, matching.id);
+          const notices = await f.notices();
+          assert.equal(notices.length, 1);
+          assert.match(notices[0].url ?? '', /kazakhstanEligible=true/);
+        },
+      );
       await t.test('digest uses the recipient preference', async () => {
         const f = await fixture();
         await db.$executeRaw`INSERT INTO "NotificationPreference" ("userId", "language") VALUES (${f.owner.id}, 'kk')`;

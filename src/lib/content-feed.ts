@@ -30,6 +30,16 @@ export interface NormalizedContentItem {
   summary: string;
   category: ContentCategory;
   geography: string;
+  workMode: string | null;
+  payStatus: string | null;
+  kazakhstanEligible: boolean | null;
+  workFormat: string | null;
+  kazakhstanEligibility: string | null;
+  workload: string | null;
+  compensation: string | null;
+  hoursPerWeekMax: number | null;
+  noExperience: boolean | null;
+  alsoWorkModes: string[];
   language: string;
   publishedAt: Date | null;
   publishedAtRaw: string | null;
@@ -46,6 +56,16 @@ interface ContentInput {
   summary?: string;
   category?: ContentCategory;
   geography?: string;
+  workMode?: string | null;
+  payStatus?: string | null;
+  kazakhstanEligible?: boolean | null;
+  workFormat?: string | null;
+  kazakhstanEligibility?: string | null;
+  workload?: string | null;
+  compensation?: string | null;
+  hoursPerWeekMax?: number | null;
+  noExperience?: boolean | null;
+  alsoWorkModes?: string[] | null;
   language?: string;
   publishedAt?: string | Date | null;
   publishedAtRaw?: string | null;
@@ -217,6 +237,10 @@ export function normalizeContentItem(
   const category = input.category ?? classify(`${title} ${summary}`);
   if (!contentCategories.includes(category)) throw new ContentFeedError('INVALID_CONTENT_ITEM');
   const geography = plainText(input.geography ?? '', 120);
+  const workFormat = plainText(input.workFormat ?? '', 160) || null;
+  const kazakhstanEligibility = plainText(input.kazakhstanEligibility ?? '', 160) || null;
+  const workload = plainText(input.workload ?? '', 160) || null;
+  const compensation = plainText(input.compensation ?? '', 160) || null;
   const language =
     /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(input.language ?? '') &&
     (input.language?.length ?? 0) <= 20
@@ -248,15 +272,95 @@ export function normalizeContentItem(
     deadline: deadline?.toISOString() ?? null,
     eventDate: eventDate?.toISOString() ?? null,
   };
+  const workMode = input.workMode ?? null;
+  const payStatus = input.payStatus ?? null;
+  const kazakhstanEligible = input.kazakhstanEligible ?? null;
+  if (workMode !== null && !['remote', 'in_person', 'hybrid'].includes(workMode))
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  if (payStatus !== null && !['paid', 'unpaid'].includes(payStatus))
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  // Filter flags must not contradict the confirmed wording shown on the card.
+  const remoteWords = /удал[её]н|удалён|remote|онлайн|online|қашықтан|гибрид|hybrid|аралас/iu;
+  const onsiteWords = /\bочно\b|офлайн|offline|on-?site|in[- ]person/iu;
+  if (
+    workFormat &&
+    ((workMode === 'remote' && onsiteWords.test(workFormat) && !remoteWords.test(workFormat)) ||
+      (workMode === 'in_person' && remoteWords.test(workFormat) && !onsiteWords.test(workFormat)))
+  )
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  if (
+    compensation &&
+    payStatus === 'paid' &&
+    /без оплаты|не оплачива|unpaid|төлемсіз/iu.test(compensation)
+  )
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  if (
+    kazakhstanEligibility &&
+    kazakhstanEligible === true &&
+    /не принима|не предусмотр|not eligible|қарастырылмаған/iu.test(kazakhstanEligibility)
+  )
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  const hoursPerWeekMax = input.hoursPerWeekMax ?? null;
+  if (
+    hoursPerWeekMax !== null &&
+    !(Number.isInteger(hoursPerWeekMax) && hoursPerWeekMax >= 1 && hoursPerWeekMax <= 60)
+  )
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  const noExperience = input.noExperience ?? null;
+  // Extra formats are those the opportunity also offers besides the main one.
+  const alsoWorkModes = [...new Set(input.alsoWorkModes ?? [])];
+  if (
+    alsoWorkModes.length > 2 ||
+    (alsoWorkModes.length > 0 && workMode === null) ||
+    alsoWorkModes.some(
+      (mode) => !['remote', 'in_person', 'hybrid'].includes(mode) || mode === workMode,
+    )
+  )
+    throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  // The hours filter must not contradict the weekly hours stated in the card text.
+  if (hoursPerWeekMax !== null && workload) {
+    for (const match of workload.matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?\s*(?:час|hour|сағат)/giu))
+      if (Math.max(Number(match[1]), Number(match[2] ?? 0)) > hoursPerWeekMax)
+        throw new ContentFeedError('INVALID_CONTENT_ITEM');
+  }
   return {
     ...semantic,
+    workMode,
+    payStatus,
+    kazakhstanEligible,
+    workFormat,
+    kazakhstanEligibility,
+    workload,
+    compensation,
+    hoursPerWeekMax,
+    noExperience,
+    alsoWorkModes,
     publishedAt,
     deadline,
     eventDate,
     externalId: input.externalId?.trim().slice(0, 500) || null,
     urlHash: hash(canonicalUrl),
     score,
-    contentHash: hash(JSON.stringify(semantic)),
+    // Empty condition fields are left out, so revisions without conditions keep their old hash.
+    contentHash: hash(
+      JSON.stringify({
+        ...semantic,
+        ...Object.fromEntries(
+          Object.entries({
+            workFormat,
+            kazakhstanEligibility,
+            workload,
+            compensation,
+            workMode,
+            payStatus,
+            kazakhstanEligible,
+            hoursPerWeekMax,
+            noExperience,
+            alsoWorkModes: alsoWorkModes.length ? [...alsoWorkModes].sort() : null,
+          }).filter(([, value]) => value !== null),
+        ),
+      }),
+    ),
   };
 }
 

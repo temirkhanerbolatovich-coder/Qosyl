@@ -1,0 +1,2 @@
+ALTER TABLE "ContentRevision" ADD COLUMN "hoursPerWeekMax" INTEGER, ADD COLUMN "noExperience" BOOLEAN, ADD COLUMN "alsoWorkModes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "ContentRevision" ADD CONSTRAINT "ContentRevision_hoursPerWeekMax_check" CHECK ("hoursPerWeekMax" IS NULL OR "hoursPerWeekMax" BETWEEN 1 AND 60), ADD CONSTRAINT "ContentRevision_alsoWorkModes_check" CHECK ("alsoWorkModes" <@ ARRAY['remote', 'in_person', 'hybrid']::TEXT[] AND cardinality("alsoWorkModes") <= 2);

@@ -27,6 +27,24 @@ describe('saved opportunity criteria', () => {
       opportunitySearchKey(normalizeOpportunityFilters({ q: '  ', geography: '' })),
     );
   });
+  it('preserves legacy identities and distinguishes new confirmed conditions', () => {
+    expect(opportunitySearchKey(normalizeOpportunityFilters({ q: 'test' }))).toBe(
+      JSON.stringify(['test', '', '', '']),
+    );
+    const filters = normalizeOpportunityFilters({
+      workMode: 'remote',
+      payStatus: 'paid',
+      kazakhstanEligible: 'true',
+    });
+    expect(opportunitySearchKey(filters)).not.toBe(
+      opportunitySearchKey(normalizeOpportunityFilters({})),
+    );
+    const url = new URL(opportunitySearchUrl(filters), 'https://qosyl.example');
+    expect(url.searchParams.get('workMode')).toBe('remote');
+    expect(url.searchParams.get('payStatus')).toBe('paid');
+    expect(url.searchParams.get('kazakhstanEligible')).toBe('true');
+    expect(() => normalizeOpportunityFilters({ kazakhstanEligible: 'false' })).toThrow();
+  });
   it('keeps distinct specialty and category choices distinct', () => {
     expect(opportunitySearchKey(normalizeOpportunityFilters({ specialty: 'health' }))).not.toBe(
       opportunitySearchKey(normalizeOpportunityFilters({ specialty: 'education' })),

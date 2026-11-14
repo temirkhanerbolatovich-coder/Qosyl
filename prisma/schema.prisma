@@ -653,6 +653,17 @@ model ContentRevision {
   summary        String
   category       String
   geography      String         @default("")
+  workMode       String?
+  payStatus      String?
+  kazakhstanEligible Boolean?
+  workFormat     String?
+  kazakhstanEligibility String?
+  workload       String?
+  compensation   String?
+  // Confirmed structured values for the catalogue filters; unknown stays null / empty.
+  hoursPerWeekMax Int?
+  noExperience    Boolean?
+  alsoWorkModes   String[]      @default([])
   language       String         @default("und")
   publishedAt    DateTime?
   publishedAtRaw String?
@@ -716,6 +727,12 @@ model OpportunityFavorite {
   itemId    String
   item      ContentItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdAt DateTime    @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
+  // Optional deadline reminder: days before the confirmed deadline, and the deadline already
+  // reminded about, so a retry never repeats and a moved deadline can remind again.
+  reminderDaysBefore Int?
+  reminderDeadline   DateTime?
+  // Private note of the owner, at most 300 characters; never part of a public projection.
+  note               String?
 
   @@unique([userId, itemId])
   @@index([userId, createdAt])
@@ -731,6 +748,9 @@ model SavedOpportunitySearch {
   category              String?
   geography             String                   @default("")
   specialty             String?
+  workMode              String?
+  payStatus             String?
+  kazakhstanEligible    Boolean?
   createdAt             DateTime                 @default(dbgenerated("timezone('UTC'::text, CURRENT_TIMESTAMP)"))
   notificationFrequency String                   @default("off")
   notificationSince     DateTime?

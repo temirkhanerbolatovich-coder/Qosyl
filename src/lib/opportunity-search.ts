@@ -93,6 +93,56 @@ export const specialtyTerms: Record<keyof typeof specialtyLabels, string[]> = {
     'hospitality',
   ],
 };
+/** Directions whose stems appear in the text; the same keyword heuristic as the catalogue filter. */
+export function opportunitySpecialties(text: string) {
+  const folded = text.toLowerCase();
+  return (Object.keys(specialtyTerms) as (keyof typeof specialtyLabels)[]).filter((key) =>
+    specialtyTerms[key].some((term) => folded.includes(term)),
+  );
+}
+/**
+ * Editor-maintained groups of equivalent stems in RU/KK/EN. Only the catalogue search expands
+ * them; saved-search notifications keep matching the exact text so old subscriptions do not change.
+ */
+export const searchSynonymGroups: string[][] = [
+  ['стажиров', 'практик', 'тағылымдам', 'internship'],
+  ['стипенди', 'шәкіртақы', 'scholarship'],
+  ['грант', 'grant'],
+  ['конкурс', 'байқау', 'competition', 'contest'],
+  ['хакатон', 'hackathon'],
+  ['мероприят', 'іс-шара', 'event'],
+  ['обучен', 'курс', 'оқыту', 'training', 'course'],
+  ['разработ', 'программир', 'бағдарламалау', 'develop', 'software', 'coding'],
+  ['дизайн', 'design', 'ui/ux'],
+  ['медицин', 'денсаулық', 'здоров', 'medic', 'health'],
+  ['волонт', 'еріктілер', 'volunteer'],
+  ['удалённ', 'удаленн', 'қашықтан', 'remote'],
+];
+/** A query matches a stem when it is a prefix of it, or extends it by at most a short ending. */
+export function matchesSearchTerm(query: string, term: string) {
+  const q = query.trim().toLowerCase();
+  return (
+    (q.length >= 3 && term.startsWith(q)) || (q.startsWith(term) && q.length - term.length <= 4)
+  );
+}
+/** The typed text first, then every stem of each synonym group it belongs to. */
+export function expandSearchTerms(query: string) {
+  const terms = new Set([query.trim().toLowerCase()]);
+  for (const group of searchSynonymGroups)
+    if (group.some((term) => matchesSearchTerm(query, term)))
+      for (const term of group) terms.add(term);
+  return [...terms].filter(Boolean);
+}
+/** Stems that make a type suggestion appear while typing. */
+export const categorySearchTerms: Partial<Record<(typeof contentCategories)[number], string[]>> = {
+  internship: searchSynonymGroups[0],
+  scholarship: searchSynonymGroups[1],
+  grant: searchSynonymGroups[2],
+  competition: searchSynonymGroups[3],
+  hackathon: searchSynonymGroups[4],
+  event: searchSynonymGroups[5],
+  training: searchSynonymGroups[6],
+};
 export const opportunityCategoryLabels: Record<string, string> = {
   hackathon: 'Хакатон',
   competition: 'Конкурс',

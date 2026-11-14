@@ -122,6 +122,30 @@ test('private opportunity favorites and saved searches', { concurrency: false },
       assert.equal((await queryOpportunitySaves(db, owner)).searches.length, 1);
       assert.deepEqual((await queryOpportunitySaves(db, other)).searches, []);
     });
+    await t.test('a favorite note is private, trimmed, bounded and removable', async () => {
+      const favoriteId = (await queryOpportunitySaves(db, owner)).favorites[0].id;
+      const note = (value: string, user = owner) =>
+        mutateOpportunitySaves(db, user, { action: 'setFavoriteNote', favoriteId, note: value });
+      assert.equal((await queryOpportunitySaves(db, owner)).favorites[0].note, null);
+      await note('  Подготовить портфолио  ');
+      const data = await queryOpportunitySaves(db, owner);
+      assert.equal(data.favorites[0].note, 'Подготовить портфолио');
+      opportunitySavedDataSchema.parse(JSON.parse(JSON.stringify(data)));
+      // Another account can neither read nor change it, and cannot even tell it exists.
+      await assert.rejects(note('чужая заметка', other), status(404));
+      assert.equal(
+        (await queryOpportunitySaves(db, owner)).favorites[0].note,
+        'Подготовить портфолио',
+      );
+      assert.deepEqual((await queryOpportunitySaves(db, other)).favorites, []);
+      // The limit holds on the server, not just in the form.
+      await assert.rejects(note('а'.repeat(301)));
+      await note('б'.repeat(300));
+      assert.equal((await queryOpportunitySaves(db, owner)).favorites[0].note?.length, 300);
+      // An empty note removes it.
+      await note('   ');
+      assert.equal((await queryOpportunitySaves(db, owner)).favorites[0].note, null);
+    });
     await t.test(
       'canonical saved queries deduplicate and keep the original identity/name',
       async () => {

@@ -5666,7 +5666,7 @@
         ],
         "summary": "Read up to six approved and current opportunities",
         "security": [],
-        "description": "Public, read-only, private/no-store. Returns an empty posts array when module is disabled or no material qualifies. Only published items of enabled sources with unexpired explicit approval are included. Reads the approved immutable snapshot, never pending revisions, audit, rights notes, hashes or runs. No remote requests. Stable order: approvedAt descending, id descending. Errors do not prevent the marketplace homepage from rendering.",
+        "description": "Public, read-only, private/no-store. Returns the current page and total matches across pages, or zero matches when the module is disabled. Only published items of enabled sources with unexpired explicit approval are included. Reads the approved immutable snapshot, never pending revisions, audit, rights notes, hashes or runs. No remote requests. Errors do not prevent the marketplace homepage from rendering.",
         "parameters": [
           {
             "name": "page",
@@ -5677,6 +5677,20 @@
               "maximum": 10000,
               "default": 1
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "deadline",
+                "relevance"
+              ],
+              "default": "newest"
+            },
+            "description": "Newest uses Qosyl approval time descending. Deadline uses application deadline ascending with unknown dates last. Relevance ranks an exact title, then a title match, then a summary match (synonyms included) and needs `q`; without `q` it behaves like newest. Ties use ID descending."
           },
           {
             "name": "q",
@@ -5734,6 +5748,101 @@
             "description": "Keyword heuristic; not an eligibility decision."
           },
           {
+            "name": "workMode",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "remote",
+                "in_person",
+                "hybrid"
+              ]
+            },
+            "description": "Editor-confirmed participation format; unknown values never match."
+          },
+          {
+            "name": "payStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "paid",
+                "unpaid"
+              ]
+            },
+            "description": "Editor-confirmed pay status; unknown values never match."
+          },
+          {
+            "name": "kazakhstanEligible",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Only opportunities with editor-confirmed participation from Kazakhstan."
+          },
+          {
+            "name": "added",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "7",
+                "30"
+              ]
+            },
+            "description": "Only items published in Qosyl within the last 7 or 30 days."
+          },
+          {
+            "name": "deadline",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "7",
+                "30"
+              ]
+            },
+            "description": "Only items with a confirmed application deadline within the next 7 or 30 days. Items without a date never match."
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "10",
+                "20",
+                "30"
+              ]
+            },
+            "description": "Only items with a confirmed weekly-hours ceiling at or below this value. Unknown hours never match."
+          },
+          {
+            "name": "noExperience",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Only items where the editor confirmed that no experience is required."
+          },
+          {
+            "name": "facets",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Adds per-value result counts. Each group ignores its own filter. When nothing matches, `relaxed` gives the result count after removing each applied filter."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -5766,7 +5875,8 @@
                   "empty": {
                     "value": {
                       "data": {
-                        "posts": []
+                        "posts": [],
+                        "total": 0
                       }
                     }
                   }
@@ -7102,7 +7212,9 @@
                     "employment",
                     "academic",
                     "volunteer",
-                    "personal"
+                    "personal",
+                    "internship",
+                    "competition"
                   ]
                 },
                 "employment": {
@@ -8720,7 +8832,9 @@
                             "employment",
                             "academic",
                             "volunteer",
-                            "personal"
+                            "personal",
+                            "internship",
+                            "competition"
                           ]
                         },
                         "employment": {
@@ -9170,6 +9284,73 @@
             "properties": {
               "action": {
                 "type": "string",
+                "const": "setFavoriteReminder"
+              },
+              "favoriteId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "daysBefore": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "const": 1
+                      },
+                      {
+                        "type": "number",
+                        "const": 3
+                      },
+                      {
+                        "type": "number",
+                        "const": 7
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "favoriteId",
+              "daysBefore"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "setFavoriteNote"
+              },
+              "favoriteId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "action",
+              "favoriteId",
+              "note"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
                 "const": "saveSearch"
               },
               "name": {
@@ -9180,6 +9361,25 @@
               "filters": {
                 "type": "object",
                 "properties": {
+                  "workMode": {
+                    "type": "string",
+                    "enum": [
+                      "remote",
+                      "in_person",
+                      "hybrid"
+                    ]
+                  },
+                  "payStatus": {
+                    "type": "string",
+                    "enum": [
+                      "paid",
+                      "unpaid"
+                    ]
+                  },
+                  "kazakhstanEligible": {
+                    "type": "string",
+                    "const": "true"
+                  },
                   "q": {
                     "default": "",
                     "type": "string",
@@ -9300,6 +9500,41 @@
                   "format": "date-time",
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                 },
+                "reminderDaysBefore": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "const": 1
+                        },
+                        {
+                          "type": "number",
+                          "const": 3
+                        },
+                        {
+                          "type": "number",
+                          "const": 7
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "post": {
                   "anyOf": [
                     {
@@ -9332,6 +9567,105 @@
                         },
                         "geography": {
                           "type": "string"
+                        },
+                        "workMode": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "remote",
+                                "in_person",
+                                "hybrid"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "payStatus": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "paid",
+                                "unpaid"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "kazakhstanEligible": {
+                          "default": null,
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "workFormat": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "kazakhstanEligibility": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "workload": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "compensation": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "hoursPerWeekMax": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 60
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "noExperience": {
+                          "default": null,
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "alsoWorkModes": {
+                          "default": [],
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "remote",
+                              "in_person",
+                              "hybrid"
+                            ]
+                          }
                         },
                         "language": {
                           "type": "string"
@@ -9395,6 +9729,16 @@
                         "summary",
                         "category",
                         "geography",
+                        "workMode",
+                        "payStatus",
+                        "kazakhstanEligible",
+                        "workFormat",
+                        "kazakhstanEligibility",
+                        "workload",
+                        "compensation",
+                        "hoursPerWeekMax",
+                        "noExperience",
+                        "alsoWorkModes",
                         "language",
                         "url",
                         "sourceName",
@@ -9416,6 +9760,8 @@
                 "id",
                 "itemId",
                 "createdAt",
+                "reminderDaysBefore",
+                "note",
                 "post"
               ],
               "additionalProperties": false
@@ -9437,6 +9783,25 @@
                 "filters": {
                   "type": "object",
                   "properties": {
+                    "workMode": {
+                      "type": "string",
+                      "enum": [
+                        "remote",
+                        "in_person",
+                        "hybrid"
+                      ]
+                    },
+                    "payStatus": {
+                      "type": "string",
+                      "enum": [
+                        "paid",
+                        "unpaid"
+                      ]
+                    },
+                    "kazakhstanEligible": {
+                      "type": "string",
+                      "const": "true"
+                    },
                     "q": {
                       "default": "",
                       "type": "string",
@@ -9850,6 +10215,105 @@
                       "geography": {
                         "type": "string"
                       },
+                      "workMode": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "remote",
+                              "in_person",
+                              "hybrid"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "payStatus": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "paid",
+                              "unpaid"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "kazakhstanEligible": {
+                        "default": null,
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "workFormat": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "kazakhstanEligibility": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "workload": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "compensation": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "hoursPerWeekMax": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "noExperience": {
+                        "default": null,
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "alsoWorkModes": {
+                        "default": [],
+                        "maxItems": 2,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "remote",
+                            "in_person",
+                            "hybrid"
+                          ]
+                        }
+                      },
                       "language": {
                         "type": "string"
                       },
@@ -9919,6 +10383,16 @@
                       "summary",
                       "category",
                       "geography",
+                      "workMode",
+                      "payStatus",
+                      "kazakhstanEligible",
+                      "workFormat",
+                      "kazakhstanEligibility",
+                      "workload",
+                      "compensation",
+                      "hoursPerWeekMax",
+                      "noExperience",
+                      "alsoWorkModes",
                       "language",
                       "publishedAt",
                       "publishedAtRaw",
@@ -10259,6 +10733,105 @@
                     "geography": {
                       "type": "string"
                     },
+                    "workMode": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "remote",
+                            "in_person",
+                            "hybrid"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "payStatus": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "paid",
+                            "unpaid"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "kazakhstanEligible": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "workFormat": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "kazakhstanEligibility": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workload": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "compensation": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "hoursPerWeekMax": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 60
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "noExperience": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "alsoWorkModes": {
+                      "default": [],
+                      "maxItems": 2,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "remote",
+                          "in_person",
+                          "hybrid"
+                        ]
+                      }
+                    },
                     "language": {
                       "type": "string"
                     },
@@ -10328,6 +10901,16 @@
                     "summary",
                     "category",
                     "geography",
+                    "workMode",
+                    "payStatus",
+                    "kazakhstanEligible",
+                    "workFormat",
+                    "kazakhstanEligibility",
+                    "workload",
+                    "compensation",
+                    "hoursPerWeekMax",
+                    "noExperience",
+                    "alsoWorkModes",
                     "language",
                     "publishedAt",
                     "publishedAtRaw",
@@ -10535,6 +11118,105 @@
                 "geography": {
                   "type": "string"
                 },
+                "workMode": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "remote",
+                        "in_person",
+                        "hybrid"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "payStatus": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "paid",
+                        "unpaid"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kazakhstanEligible": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "workFormat": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kazakhstanEligibility": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "workload": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compensation": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "hoursPerWeekMax": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 60
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "noExperience": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "alsoWorkModes": {
+                  "default": [],
+                  "maxItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "remote",
+                      "in_person",
+                      "hybrid"
+                    ]
+                  }
+                },
                 "language": {
                   "type": "string"
                 },
@@ -10604,6 +11286,16 @@
                 "summary",
                 "category",
                 "geography",
+                "workMode",
+                "payStatus",
+                "kazakhstanEligible",
+                "workFormat",
+                "kazakhstanEligibility",
+                "workload",
+                "compensation",
+                "hoursPerWeekMax",
+                "noExperience",
+                "alsoWorkModes",
                 "language",
                 "publishedAt",
                 "publishedAtRaw",
@@ -10764,6 +11456,105 @@
                 "geography": {
                   "type": "string"
                 },
+                "workMode": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "remote",
+                        "in_person",
+                        "hybrid"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "payStatus": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "paid",
+                        "unpaid"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kazakhstanEligible": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "workFormat": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kazakhstanEligibility": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "workload": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compensation": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "hoursPerWeekMax": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 60
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "noExperience": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "alsoWorkModes": {
+                  "default": [],
+                  "maxItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "remote",
+                      "in_person",
+                      "hybrid"
+                    ]
+                  }
+                },
                 "language": {
                   "type": "string"
                 },
@@ -10826,6 +11617,16 @@
                 "summary",
                 "category",
                 "geography",
+                "workMode",
+                "payStatus",
+                "kazakhstanEligible",
+                "workFormat",
+                "kazakhstanEligibility",
+                "workload",
+                "compensation",
+                "hoursPerWeekMax",
+                "noExperience",
+                "alsoWorkModes",
                 "language",
                 "url",
                 "sourceName",
@@ -10837,10 +11638,78 @@
               ],
               "additionalProperties": false
             }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "facets": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "workMode": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "payStatus": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "kazakhstanEligible": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "relaxed": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              }
+            },
+            "required": [
+              "category",
+              "workMode",
+              "payStatus",
+              "kazakhstanEligible",
+              "relaxed"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
-          "posts"
+          "posts",
+          "total"
         ],
         "additionalProperties": false
       },
@@ -11166,6 +12035,115 @@
             "type": "string",
             "maxLength": 120
           },
+          "workMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "remote",
+                  "in_person",
+                  "hybrid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "paid",
+                  "unpaid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kazakhstanEligible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "workFormat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kazakhstanEligibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workload": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compensation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hoursPerWeekMax": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "noExperience": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "alsoWorkModes": {
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "remote",
+                "in_person",
+                "hybrid"
+              ]
+            }
+          },
           "language": {
             "default": "und",
             "type": "string",
@@ -11344,6 +12322,115 @@
             "default": "",
             "type": "string",
             "maxLength": 120
+          },
+          "workMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "remote",
+                  "in_person",
+                  "hybrid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "paid",
+                  "unpaid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kazakhstanEligible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "workFormat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kazakhstanEligibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workload": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compensation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hoursPerWeekMax": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "noExperience": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "alsoWorkModes": {
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "remote",
+                "in_person",
+                "hybrid"
+              ]
+            }
           },
           "language": {
             "default": "und",
@@ -17449,7 +18536,9 @@
                                       "employment",
                                       "academic",
                                       "volunteer",
-                                      "personal"
+                                      "personal",
+                                      "internship",
+                                      "competition"
                                     ]
                                   },
                                   "employment": {

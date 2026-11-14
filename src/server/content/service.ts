@@ -91,6 +91,16 @@ export async function storeContentItem(
       summary: item.summary,
       category: item.category,
       geography: item.geography,
+      workMode: item.workMode,
+      payStatus: item.payStatus,
+      kazakhstanEligible: item.kazakhstanEligible,
+      workFormat: item.workFormat,
+      kazakhstanEligibility: item.kazakhstanEligibility,
+      workload: item.workload,
+      compensation: item.compensation,
+      hoursPerWeekMax: item.hoursPerWeekMax,
+      noExperience: item.noExperience,
+      alsoWorkModes: item.alsoWorkModes,
       language: item.language,
       publishedAt: item.publishedAt,
       publishedAtRaw: item.publishedAtRaw,
@@ -190,7 +200,29 @@ async function applyEditorialAction(
     let normalized: NormalizedContentItem;
     try {
       normalized = normalizeContentItem(
-        fields,
+        {
+          ...fields,
+          workMode: fields.workMode === undefined ? latest.workMode : fields.workMode,
+          payStatus: fields.payStatus === undefined ? latest.payStatus : fields.payStatus,
+          kazakhstanEligible:
+            fields.kazakhstanEligible === undefined
+              ? latest.kazakhstanEligible
+              : fields.kazakhstanEligible,
+          workFormat: fields.workFormat === undefined ? latest.workFormat : fields.workFormat,
+          kazakhstanEligibility:
+            fields.kazakhstanEligibility === undefined
+              ? latest.kazakhstanEligibility
+              : fields.kazakhstanEligibility,
+          workload: fields.workload === undefined ? latest.workload : fields.workload,
+          compensation:
+            fields.compensation === undefined ? latest.compensation : fields.compensation,
+          hoursPerWeekMax:
+            fields.hoursPerWeekMax === undefined ? latest.hoursPerWeekMax : fields.hoursPerWeekMax,
+          noExperience:
+            fields.noExperience === undefined ? latest.noExperience : fields.noExperience,
+          alsoWorkModes:
+            fields.alsoWorkModes === undefined ? latest.alsoWorkModes : fields.alsoWorkModes,
+        },
         `https://${item.source.allowedHost}/`,
         item.source.allowedHost,
       );
@@ -205,6 +237,16 @@ async function applyEditorialAction(
       summary,
       category,
       geography,
+      workMode,
+      payStatus,
+      kazakhstanEligible,
+      workFormat,
+      kazakhstanEligibility,
+      workload,
+      compensation,
+      hoursPerWeekMax,
+      noExperience,
+      alsoWorkModes,
       language,
       publishedAt,
       publishedAtRaw,
@@ -223,6 +265,16 @@ async function applyEditorialAction(
         summary,
         category,
         geography,
+        workMode,
+        payStatus,
+        kazakhstanEligible,
+        workFormat,
+        kazakhstanEligibility,
+        workload,
+        compensation,
+        hoursPerWeekMax,
+        noExperience,
+        alsoWorkModes,
         language,
         publishedAt,
         publishedAtRaw,

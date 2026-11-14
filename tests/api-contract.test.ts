@@ -311,6 +311,17 @@ describe('Maintained application API contract', () => {
       schema: { minimum: 1, maximum: 6 },
     });
     expect(publicRead.description).toContain('approved immutable snapshot');
+    expect(publicRead.parameters).toContainEqual(
+      expect.objectContaining({
+        name: 'sort',
+        schema: { type: 'string', enum: ['newest', 'deadline', 'relevance'], default: 'newest' },
+      }),
+    );
+    for (const name of ['facets', 'workMode', 'payStatus', 'kazakhstanEligible'])
+      expect(publicRead.parameters).toContainEqual(expect.objectContaining({ name, in: 'query' }));
+    expect(publicRead.responses['200']).toMatchObject({
+      content: { 'application/json': { examples: { empty: { value: { data: { total: 0 } } } } } },
+    });
     const detail = spec.paths['/api/admin/content/{id}'].get;
     expect(detail.security).not.toContainEqual({});
     expect(detail.parameters).toContainEqual({
@@ -320,6 +331,7 @@ describe('Maintained application API contract', () => {
       schema: { type: 'string' },
     });
     const schemas = spec.components.schemas as Record<string, Record<string, unknown>>;
+    expect(schemas.PublicContentData.required).toContain('total');
     const publicData = schemas.PublicContentData.properties as Record<
       string,
       { items: { properties: Record<string, unknown> } }

@@ -7,10 +7,15 @@ import {
   queryContentDetail,
   queryContentIntake,
 } from '../src/server/content/service';
-import { queryPublicContent } from '../src/server/content/public';
+import {
+  queryPublicContent,
+  queryPublicContentDetail,
+  querySimilarOpportunities,
+} from '../src/server/content/public';
 import { runContentIntake } from '../src/server/content/worker';
 import { AppError } from '../src/lib/permissions';
 import { contentDetailDataSchema, publicContentDataSchema } from '../src/contracts/content-intake';
+import { publicContentQueryInput } from '../src/lib/content-validation';
 
 const target = new URL(process.env.DATABASE_TEST_URL ?? 'invalid:');
 if (
@@ -95,6 +100,412 @@ test('editorial lifecycle and public isolation', async (t) => {
     publicContentDataSchema.parse(JSON.parse(JSON.stringify(await queryPublicContent()))).posts;
   try {
     await mutateContentIntake({ action: 'setModuleEnabled', enabled: true }, admin);
+    await t.test('public totals and deadline order stay consistent across pages', async () => {
+      const title = `Pagination fixture ${randomUUID()}`;
+      const sortedIds = [];
+      for (const hours of [12, 8, 4, 3, 2, 1, null]) {
+        const id = await create({
+          title,
+          ...(hours ? { deadline: new Date(Date.now() + hours * 3600000).toISOString() } : {}),
+        });
+        await review(id, 'publish');
+        sortedIds.push(id);
+      }
+      const deadlineOrder = [...sortedIds.slice(0, 6).reverse(), sortedIds[6]];
+      const query = publicContentQueryInput.parse({ q: title, sort: 'deadline' });
+      const first = await queryPublicContent(6, query);
+      assert.equal(first.total, 7);
+      assert.deepEqual(
+        first.posts.map((post) => post.id),
+        deadlineOrder.slice(0, 6),
+      );
+      const second = await queryPublicContent(6, { ...query, page: 2 });
+      assert.equal(second.total, 7);
+      assert.deepEqual(
+        second.posts.map((post) => post.id),
+        deadlineOrder.slice(6),
+      );
+
+      await review(sortedIds[0], 'withdraw');
+      assert.deepEqual(await queryPublicContent(6, { ...query, page: 2 }), {
+        posts: [],
+        total: 6,
+      });
+      await mutateContentIntake(
+        { action: 'setSourceEnabled', sourceId: source.id, enabled: false },
+        admin,
+      );
+      assert.deepEqual(await queryPublicContent(6, query), { posts: [], total: 0 });
+      await mutateContentIntake(
+        { action: 'setSourceEnabled', sourceId: source.id, enabled: true },
+        admin,
+      );
+      for (const id of sortedIds.slice(1)) await review(id, 'archive');
+    });
+    await t.test('detail exposes only a current approved and available revision', async () => {
+      const id = await create();
+      assert.equal(await queryPublicContentDetail(id), null);
+      await review(id, 'publish');
+      const published = await queryPublicContentDetail(id);
+      assert.equal(published?.id, id);
+      assert.ok(published && !('rightsNote' in published) && !('contentHash' in published));
+      await mutateContentIntake(
+        { action: 'setSourceEnabled', sourceId: source.id, enabled: false },
+        admin,
+      );
+      assert.equal(await queryPublicContentDetail(id), null);
+      await mutateContentIntake(
+        { action: 'setSourceEnabled', sourceId: source.id, enabled: true },
+        admin,
+      );
+      await mutateContentIntake({ action: 'setModuleEnabled', enabled: false }, admin);
+      assert.equal(await queryPublicContentDetail(id), null);
+      await mutateContentIntake({ action: 'setModuleEnabled', enabled: true }, admin);
+      await db.contentItem.update({
+        where: { id },
+        data: { approvedAt: new Date(Date.now() - 5000), expiresAt: new Date(Date.now() - 1000) },
+      });
+      assert.equal(await queryPublicContentDetail(id), null);
+      assert.equal(await queryPublicContentDetail('nonexistent'), null);
+      await review(id, 'archive');
+      assert.equal(await queryPublicContentDetail(id), null);
+    });
+    await t.test('structured filters use only confirmed approved values', async () => {
+      // Catalogue synonyms and relevance order; the geography tag isolates these three items.
+      const wordTag = `synonym${randomUUID().replaceAll('-', '')}`;
+      const kazakhWord = await create({
+        title: `${wordTag} тағылымдама`,
+        geography: wordTag,
+        category: 'internship',
+      });
+      const russianWord = await create({
+        title: `${wordTag} стажировка`,
+        geography: wordTag,
+        category: 'internship',
+      });
+      const inSummary = await create({
+        title: `${wordTag} отдельное описание`,
+        summary: 'Практика в команде.',
+        geography: wordTag,
+        category: 'internship',
+      });
+      for (const id of [kazakhWord, russianWord, inSummary]) await review(id, 'publish');
+      const bySynonym = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          q: 'стажировка',
+          geography: wordTag,
+          sort: 'relevance',
+        }),
+      );
+      assert.deepEqual(
+        new Set(bySynonym.posts.map((post) => post.id)),
+        new Set([kazakhWord, russianWord, inSummary]),
+      );
+      // Title matches (the word itself or a synonym) outrank a summary-only match.
+      assert.equal(bySynonym.posts.at(-1)?.id, inSummary);
+      assert.equal(
+        (
+          await queryPublicContent(
+            6,
+            publicContentQueryInput.parse({ q: 'хакатон', geography: wordTag }),
+          )
+        ).total,
+        0,
+      );
+      for (const id of [kazakhWord, russianWord, inSummary]) await review(id, 'archive');
+      // Decision fields: extra formats count as formats, hours and experience need confirmation.
+      const decisionTag = `decision${randomUUID().replaceAll('-', '')}`;
+      const flexible = await create({
+        title: `${decisionTag} flexible`,
+        geography: decisionTag,
+        category: 'internship',
+        workMode: 'remote',
+        alsoWorkModes: ['hybrid'],
+        hoursPerWeekMax: 20,
+        noExperience: true,
+      });
+      const office = await create({
+        title: `${decisionTag} office`,
+        geography: decisionTag,
+        category: 'internship',
+        workMode: 'in_person',
+        hoursPerWeekMax: 30,
+        noExperience: false,
+      });
+      const unconfirmed = await create({
+        title: `${decisionTag} unconfirmed`,
+        geography: decisionTag,
+        category: 'internship',
+      });
+      for (const id of [flexible, office, unconfirmed]) await review(id, 'publish');
+      const decided = async (extra: Record<string, unknown>) =>
+        new Set(
+          (
+            await queryPublicContent(
+              6,
+              publicContentQueryInput.parse({ geography: decisionTag, ...extra }),
+            )
+          ).posts.map((post) => post.id),
+        );
+      assert.deepEqual(await decided({ workMode: 'remote' }), new Set([flexible]));
+      assert.deepEqual(await decided({ workMode: 'hybrid' }), new Set([flexible]));
+      assert.deepEqual(await decided({ workMode: 'in_person' }), new Set([office]));
+      assert.deepEqual(await decided({ hours: '20' }), new Set([flexible]));
+      assert.deepEqual(await decided({ hours: '30' }), new Set([flexible, office]));
+      assert.deepEqual(await decided({ hours: '10' }), new Set());
+      assert.deepEqual(await decided({ noExperience: 'true' }), new Set([flexible]));
+      const decisionCounts = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({ geography: decisionTag, facets: 'true' }),
+      );
+      assert.deepEqual(decisionCounts.facets?.workMode, { remote: 1, hybrid: 1, in_person: 1 });
+      const decisionNone = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          geography: decisionTag,
+          workMode: 'in_person',
+          hours: '10',
+          facets: 'true',
+        }),
+      );
+      assert.equal(decisionNone.total, 0);
+      assert.equal(decisionNone.facets?.relaxed.hours, 1);
+      assert.equal(decisionNone.facets?.relaxed.workMode, 0);
+      const detail = (await queryPublicContentDetail(flexible))!;
+      assert.deepEqual(
+        [detail.workMode, detail.alsoWorkModes, detail.hoursPerWeekMax, detail.noExperience],
+        ['remote', ['hybrid'], 20, true],
+      );
+      for (const id of [flexible, office, unconfirmed]) await review(id, 'archive');
+      // Similar opportunities: same type only, same direction first, never itself or hidden items.
+      const similarTag = `similar${randomUUID().replaceAll('-', '')}`;
+      const mk = (title: string, category = 'training') => create({ title, category });
+      const base = await mk(`${similarTag} педагогика курс`);
+      const sameDirection = await mk(`${similarTag} педагог практикум`);
+      const plain = await mk(`${similarTag} обычный курс`);
+      const otherType = await mk(`${similarTag} педагог стажировка`, 'internship');
+      const hidden = await mk(`${similarTag} педагог снятый`);
+      const unclassified = await mk(`${similarTag} без типа`, 'other');
+      for (const id of [base, sameDirection, plain, otherType, hidden, unclassified])
+        await review(id, 'publish');
+      await review(hidden, 'withdraw');
+      const similar = await querySimilarOpportunities(base);
+      const similarIds = similar.map((item) => item.post.id);
+      assert.ok(similar.length <= 3);
+      assert.ok(!similarIds.includes(base) && !similarIds.includes(otherType));
+      assert.ok(!similarIds.includes(hidden));
+      assert.ok(similar.every((item) => item.post.category === 'training'));
+      assert.equal(similarIds[0], sameDirection);
+      assert.equal(similar[0].reason, 'specialty');
+      assert.ok(similarIds.includes(plain) || similar.length === 3);
+      assert.deepEqual(await querySimilarOpportunities(unclassified), []);
+      assert.deepEqual(await querySimilarOpportunities('no-such-item'), []);
+      for (const id of [base, sameDirection, plain, otherType, unclassified])
+        await review(id, 'archive');
+      // Time slices: a deadline window needs a confirmed date; "added" uses the Qosyl approval time.
+      const windowTag = `window${randomUUID().replaceAll('-', '')}`;
+      const day = 86400000;
+      const soon = await create({
+        title: `${windowTag} soon`,
+        geography: windowTag,
+        deadline: new Date(Date.now() + 2 * day).toISOString(),
+      });
+      const later = await create({
+        title: `${windowTag} later`,
+        geography: windowTag,
+        deadline: new Date(Date.now() + 20 * day).toISOString(),
+      });
+      const undated = await create({ title: `${windowTag} undated`, geography: windowTag });
+      for (const id of [soon, later, undated]) await review(id, 'publish');
+      await db.contentItem.update({
+        where: { id: later },
+        data: { approvedAt: new Date(Date.now() - 10 * day) },
+      });
+      const idsFor = async (extra: Record<string, unknown>) =>
+        new Set(
+          (
+            await queryPublicContent(
+              6,
+              publicContentQueryInput.parse({ geography: windowTag, ...extra }),
+            )
+          ).posts.map((post) => post.id),
+        );
+      assert.deepEqual(await idsFor({ deadline: '7' }), new Set([soon]));
+      assert.deepEqual(await idsFor({ deadline: '30' }), new Set([soon, later]));
+      assert.deepEqual(await idsFor({ added: '7' }), new Set([soon, undated]));
+      assert.deepEqual(await idsFor({ added: '30' }), new Set([soon, later, undated]));
+      const none = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          geography: windowTag,
+          added: '7',
+          deadline: '30',
+          facets: 'true',
+        }),
+      );
+      assert.deepEqual(new Set(none.posts.map((post) => post.id)), new Set([soon]));
+      const nothing = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          geography: windowTag,
+          category: 'grant',
+          deadline: '7',
+          facets: 'true',
+        }),
+      );
+      assert.equal(nothing.total, 0);
+      assert.equal(nothing.facets?.relaxed.category, 1);
+      assert.equal(nothing.facets?.relaxed.deadline, 0);
+      for (const id of [soon, later, undated]) await review(id, 'archive');
+      const tag = `statusfilter${randomUUID()}`;
+      const confirmed = await create({
+        title: `${tag} confirmed internship`,
+        category: 'internship',
+        workMode: 'remote',
+        payStatus: 'paid',
+        kazakhstanEligible: true,
+      });
+      const unknown = await create({
+        title: `${tag} unknown internship`,
+        category: 'internship',
+        workFormat: 'Удалённо',
+        compensation: 'Оплата есть',
+        kazakhstanEligibility: 'Принимают из Казахстана',
+      });
+      const contrary = await create({
+        title: `${tag} not eligible internship`,
+        category: 'internship',
+        workMode: 'remote',
+        payStatus: 'unpaid',
+        kazakhstanEligible: false,
+      });
+      for (const id of [confirmed, unknown, contrary]) await review(id, 'publish');
+      const filter = publicContentQueryInput.parse({
+        q: tag,
+        workMode: 'remote',
+        payStatus: 'paid',
+        kazakhstanEligible: 'true',
+      });
+      assert.deepEqual(
+        (await queryPublicContent(6, filter)).posts.map((post) => post.id),
+        [confirmed],
+      );
+      // Facet counts ignore their own group, count only confirmed flags and explain empty results.
+      const counted = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({ q: tag, facets: 'true' }),
+      );
+      assert.equal(counted.total, 3);
+      assert.deepEqual(counted.facets?.workMode, { remote: 2 });
+      assert.deepEqual(counted.facets?.payStatus, { paid: 1, unpaid: 1 });
+      assert.equal(counted.facets?.kazakhstanEligible, 1);
+      assert.equal(counted.facets?.category.internship, 3);
+      assert.deepEqual(counted.facets?.relaxed, {});
+      const narrowed = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          q: tag,
+          workMode: 'remote',
+          payStatus: 'paid',
+          facets: 'true',
+        }),
+      );
+      assert.equal(narrowed.facets?.workMode.remote, 1);
+      assert.equal(narrowed.facets?.payStatus.unpaid, 1);
+      const empty = await queryPublicContent(
+        6,
+        publicContentQueryInput.parse({
+          q: tag,
+          workMode: 'in_person',
+          payStatus: 'paid',
+          facets: 'true',
+        }),
+      );
+      assert.equal(empty.total, 0);
+      assert.equal(empty.facets?.relaxed.workMode, 1);
+      assert.equal(empty.facets?.relaxed.payStatus, 0);
+      const current = await queryContentDetail(admin, confirmed);
+      await mutateContentIntake(
+        {
+          action: 'editContent',
+          itemId: confirmed,
+          expectedRevisionId: current.history[0].id,
+          expectedUpdatedAt: current.item.updatedAt.toISOString(),
+          url: current.item.canonicalUrl,
+          title: current.history[0].title,
+          category: current.history[0].category,
+          language: 'en',
+          payStatus: 'unpaid',
+          reason,
+        },
+        admin,
+      );
+      assert.equal((await queryPublicContent(6, filter)).posts.length, 0);
+      const edited = await queryContentDetail(admin, confirmed);
+      assert.equal(edited.history[0].workMode, 'remote');
+      assert.equal(edited.history[0].kazakhstanEligible, true);
+      await review(confirmed, 'publish');
+      assert.equal((await queryPublicContent(6, filter)).posts.length, 0);
+      for (const id of [confirmed, unknown, contrary]) await review(id, 'archive');
+    });
+    await t.test(
+      'conditions are revised, approved and deduplicated with the source snapshot',
+      async () => {
+        const id = await create({
+          workFormat: 'Удалённо',
+          kazakhstanEligibility: 'Принимают из Казахстана',
+          workload: '20 часов в неделю',
+          compensation: 'Без оплаты',
+        });
+        await review(id, 'publish');
+        assert.equal((await posts()).find((post) => post.id === id)?.workload, '20 часов в неделю');
+        const current = await queryContentDetail(admin, id);
+        await mutateContentIntake(
+          {
+            action: 'editContent',
+            itemId: id,
+            expectedRevisionId: current.history[0].id,
+            expectedUpdatedAt: current.item.updatedAt.toISOString(),
+            url: current.item.canonicalUrl,
+            title: current.history[0].title,
+            summary: current.history[0].summary,
+            category: current.history[0].category,
+            language: 'en',
+            workload: '10 часов в неделю',
+            reason,
+          },
+          admin,
+        );
+        assert.ok(!(await posts()).some((post) => post.id === id));
+        const edited = await queryContentDetail(admin, id);
+        assert.equal(edited.history[0].compensation, 'Без оплаты');
+        await review(id, 'publish');
+        const approved = (await posts()).find((post) => post.id === id)!;
+        assert.equal(approved.workload, '10 часов в неделю');
+        assert.equal(approved.kazakhstanEligibility, 'Принимают из Казахстана');
+        const repeated = await mutateContentIntake(
+          {
+            action: 'addManualContent',
+            sourceId: source.id,
+            url: current.item.canonicalUrl,
+            title: current.history[0].title,
+            summary: current.history[0].summary,
+            category: current.history[0].category,
+            language: 'en',
+            workFormat: 'Удалённо',
+            kazakhstanEligibility: 'Принимают из Казахстана',
+            workload: '20 часов в неделю',
+            compensation: 'Без оплаты',
+          },
+          admin,
+        );
+        assert.ok(repeated && 'kind' in repeated);
+        assert.equal(repeated.kind, 'duplicate');
+        assert.equal((await posts()).find((post) => post.id === id)?.workload, '10 часов в неделю');
+        await review(id, 'archive');
+      },
+    );
     await t.test(
       'only the explicit approved revision is public, without internal data',
       async () => {

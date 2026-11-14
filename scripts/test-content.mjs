@@ -35,6 +35,7 @@ try {
       'tests/opportunity-discovery.integration.mts',
       'tests/opportunity-saved.integration.mts',
       'tests/opportunity-search-notifications.integration.mts',
+      'tests/opportunity-deadline-reminders.integration.mts',
     ],
     { env, stdio: 'inherit', windowsHide: true },
   );

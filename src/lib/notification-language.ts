@@ -47,6 +47,22 @@ export function opportunityNotificationText(language: NotificationLanguage, coun
     : `Новые возможности по сохранённому поиску: ${count}. Откройте актуальную выдачу.`;
 }
 
+/** `title` is publisher text and is kept verbatim; the surrounding words are translated. */
+export function opportunityDeadlineText(
+  language: NotificationLanguage,
+  title: string,
+  daysLeft: number,
+) {
+  const shortTitle = title.length > 120 ? `${title.slice(0, 117)}…` : title;
+  if (language === 'kk')
+    return daysLeft <= 1
+      ? `«${shortTitle}» өтінім беру мерзіміне бір тәуліктен аспайтын уақыт қалды. Мерзімді ұйымдастырушы сайтынан тексеріңіз.`
+      : `«${shortTitle}» өтінім беру мерзіміне ${daysLeft} күн қалды. Мерзімді ұйымдастырушы сайтынан тексеріңіз.`;
+  return daysLeft <= 1
+    ? `До срока подачи «${shortTitle}» остались сутки или меньше. Проверьте срок на сайте организатора.`
+    : `До срока подачи «${shortTitle}» осталось дней: ${daysLeft}. Проверьте срок на сайте организатора.`;
+}
+
 export function lifecycleNotificationText(
   language: NotificationLanguage,
   kind: 'expired' | 'publication' | 'execution' | 'review',

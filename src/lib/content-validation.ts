@@ -62,6 +62,19 @@ export const manualContentInput = z.object({
   summary: z.string().trim().max(600).default(''),
   category: z.enum(manualCategories).default('other'),
   geography: z.string().trim().max(120).default(''),
+  workMode: z.enum(['remote', 'in_person', 'hybrid']).nullable().optional(),
+  payStatus: z.enum(['paid', 'unpaid']).nullable().optional(),
+  kazakhstanEligible: z.boolean().nullable().optional(),
+  workFormat: z.string().trim().max(160).nullable().optional(),
+  kazakhstanEligibility: z.string().trim().max(160).nullable().optional(),
+  workload: z.string().trim().max(160).nullable().optional(),
+  compensation: z.string().trim().max(160).nullable().optional(),
+  hoursPerWeekMax: z.number().int().min(1).max(60).nullable().optional(),
+  noExperience: z.boolean().nullable().optional(),
+  alsoWorkModes: z
+    .array(z.enum(['remote', 'in_person', 'hybrid']))
+    .max(2)
+    .optional(),
   language: z
     .string()
     .trim()
@@ -110,6 +123,9 @@ export const contentEditInput = manualContentInput.omit({ sourceId: true }).exte
   reason: z.string().trim().min(10).max(2000),
 });
 export const opportunityFilters = {
+  workMode: z.enum(['remote', 'in_person', 'hybrid']).optional(),
+  payStatus: z.enum(['paid', 'unpaid']).optional(),
+  kazakhstanEligible: z.literal('true').optional(),
   q: z.string().trim().max(100).default(''),
   category: z.enum(manualCategories).optional(),
   geography: z.string().trim().max(120).default(''),
@@ -126,9 +142,25 @@ export const opportunityFilters = {
     ])
     .optional(),
 };
+export const opportunitySort = z.enum(['newest', 'deadline', 'relevance']);
+export type OpportunitySort = z.infer<typeof opportunitySort>;
+
+/** Number of days for the catalogue time slices; they are views, not saved-search filters. */
+export const opportunityWindow = z.enum(['7', '30']);
+export type OpportunityWindow = z.infer<typeof opportunityWindow>;
+/** Weekly-hours ceilings of the catalogue view; only confirmed hours can match. */
+export const opportunityHours = z.enum(['10', '20', '30']);
+export type OpportunityHours = z.infer<typeof opportunityHours>;
+
 export const publicContentQueryInput = z.object({
   limit: z.coerce.number().int().min(1).max(6).default(6),
   page: z.coerce.number().int().min(1).max(10000).default(1),
+  sort: opportunitySort.optional(),
+  added: opportunityWindow.optional(),
+  deadline: opportunityWindow.optional(),
+  hours: opportunityHours.optional(),
+  noExperience: z.literal('true').optional(),
+  facets: z.literal('true').optional(),
   ...opportunityFilters,
 });
 export type OpportunityQuery = z.infer<typeof publicContentQueryInput>;

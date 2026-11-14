@@ -30,7 +30,7 @@ export async function queryOpportunitySaves(database: PrismaClient, actor: User)
         where: { userId: actor.id },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 100,
-        select: { id: true, itemId: true, createdAt: true },
+        select: { id: true, itemId: true, createdAt: true, reminderDaysBefore: true, note: true },
       });
       const searches = await tx.savedOpportunitySearch.findMany({
         where: { userId: actor.id },
@@ -59,6 +59,9 @@ export async function queryOpportunitySaves(database: PrismaClient, actor: User)
           nextNotificationAt: search.nextNotificationAt,
           filters: {
             q: search.q,
+            ...(search.workMode ? { workMode: search.workMode } : {}),
+            ...(search.payStatus ? { payStatus: search.payStatus } : {}),
+            ...(search.kazakhstanEligible ? { kazakhstanEligible: 'true' as const } : {}),
             ...(search.category ? { category: search.category } : {}),
             geography: search.geography,
             ...(search.specialty ? { specialty: search.specialty } : {}),
@@ -78,6 +81,38 @@ export async function mutateOpportunitySaves(database: PrismaClient, actor: User
     if (input.action === 'removeFavorite') {
       await tx.opportunityFavorite.deleteMany({
         where: { id: input.favoriteId, userId: actor.id },
+      });
+    } else if (input.action === 'setFavoriteNote') {
+      const updated = await tx.opportunityFavorite.updateMany({
+        where: { id: input.favoriteId, userId: actor.id },
+        data: { note: input.note || null },
+      });
+      assert(updated.count === 1, 404, 'Сохранённая возможность недоступна.');
+    } else if (input.action === 'setFavoriteReminder') {
+      const favorite = await tx.opportunityFavorite.findFirst({
+        where: { id: input.favoriteId, userId: actor.id },
+      });
+      assert(favorite, 404, 'Сохранённая возможность недоступна.');
+      // A retried choice keeps the delivery record, so it cannot trigger a repeat.
+      if (favorite.reminderDaysBefore === input.daysBefore) return { saved: true as const };
+      if (input.daysBefore !== null) {
+        const settings = await tx.contentModuleSettings.findUnique({ where: { id: 'content' } });
+        const visible =
+          settings?.enabled &&
+          (await tx.contentItem.findFirst({
+            where: { ...visibleContentWhere(), id: favorite.itemId },
+            select: publicContentSelect,
+          }));
+        const post = visible ? projectPublicContent(visible) : null;
+        assert(
+          post?.deadline && new Date(post.deadline) > new Date(),
+          409,
+          'Напоминание доступно, пока у возможности есть подтверждённый срок подачи.',
+        );
+      }
+      await tx.opportunityFavorite.update({
+        where: { id: favorite.id },
+        data: { reminderDaysBefore: input.daysBefore, reminderDeadline: null },
       });
     } else if (input.action === 'removeSearch') {
       await tx.savedOpportunitySearch.deleteMany({
@@ -146,6 +181,9 @@ export async function mutateOpportunitySaves(database: PrismaClient, actor: User
           name: input.name,
           queryHash,
           q: filters.q,
+          workMode: filters.workMode ?? null,
+          payStatus: filters.payStatus ?? null,
+          kazakhstanEligible: filters.kazakhstanEligible ? true : null,
           category: filters.category ?? null,
           geography: filters.geography,
           specialty: filters.specialty ?? null,

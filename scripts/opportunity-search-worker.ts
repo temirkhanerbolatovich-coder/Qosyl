@@ -59,13 +59,25 @@ export async function runOpportunitySearchCommand(
   const { db } = await import('../src/lib/db');
   const { runOpportunitySearchNotifications } =
     await import('../src/server/content/search-notifications');
+  const { runOpportunityDeadlineReminders } =
+    await import('../src/server/content/deadline-reminders');
   const controller = new AbortController();
   const stop = () => controller.abort();
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
   try {
     return await runOpportunitySearchLoop(
-      () => runOpportunitySearchNotifications(db, { batchSize: settings.batchSize }),
+      async () => {
+        const searches = await runOpportunitySearchNotifications(db, {
+          batchSize: settings.batchSize,
+        });
+        // Deadline reminders share the pass, the lock and the global switch of the worker.
+        const reminders = await runOpportunityDeadlineReminders(db);
+        return {
+          ...searches,
+          notificationsCreated: searches.notificationsCreated + reminders.notificationsCreated,
+        };
+      },
       { once: args.includes('--once'), intervalMs: settings.intervalMs },
       controller.signal,
     );

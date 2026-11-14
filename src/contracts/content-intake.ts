@@ -31,6 +31,19 @@ export const contentRevisionSchema = z.strictObject({
   summary: z.string(),
   category: z.enum(manualCategories),
   geography: z.string(),
+  workMode: z.enum(['remote', 'in_person', 'hybrid']).nullable().default(null),
+  payStatus: z.enum(['paid', 'unpaid']).nullable().default(null),
+  kazakhstanEligible: z.boolean().nullable().default(null),
+  workFormat: z.string().nullable().default(null),
+  kazakhstanEligibility: z.string().nullable().default(null),
+  workload: z.string().nullable().default(null),
+  compensation: z.string().nullable().default(null),
+  hoursPerWeekMax: z.number().int().min(1).max(60).nullable().default(null),
+  noExperience: z.boolean().nullable().default(null),
+  alsoWorkModes: z
+    .array(z.enum(['remote', 'in_person', 'hybrid']))
+    .max(2)
+    .default([]),
   language: z.string(),
   publishedAt: date.nullable(),
   publishedAtRaw: z.string().nullable(),
@@ -109,6 +122,19 @@ export const publicContentPostSchema = z.strictObject({
   summary: z.string(),
   category: z.enum(manualCategories),
   geography: z.string(),
+  workMode: z.enum(['remote', 'in_person', 'hybrid']).nullable().default(null),
+  payStatus: z.enum(['paid', 'unpaid']).nullable().default(null),
+  kazakhstanEligible: z.boolean().nullable().default(null),
+  workFormat: z.string().nullable().default(null),
+  kazakhstanEligibility: z.string().nullable().default(null),
+  workload: z.string().nullable().default(null),
+  compensation: z.string().nullable().default(null),
+  hoursPerWeekMax: z.number().int().min(1).max(60).nullable().default(null),
+  noExperience: z.boolean().nullable().default(null),
+  alsoWorkModes: z
+    .array(z.enum(['remote', 'in_person', 'hybrid']))
+    .max(2)
+    .default([]),
   language: z.string(),
   url: z.string(),
   sourceName: z.string(),
@@ -120,7 +146,19 @@ export const publicContentPostSchema = z.strictObject({
 });
 export const publicContentDataSchema = z.strictObject({
   posts: z.array(publicContentPostSchema).max(6),
+  total: z.number().int().nonnegative(),
+  /** Present only when the request asks for `facets=true`. */
+  facets: z
+    .strictObject({
+      category: z.record(z.string(), z.number().int().nonnegative()),
+      workMode: z.record(z.string(), z.number().int().nonnegative()),
+      payStatus: z.record(z.string(), z.number().int().nonnegative()),
+      kazakhstanEligible: z.number().int().nonnegative(),
+      relaxed: z.record(z.string(), z.number().int().nonnegative()),
+    })
+    .optional(),
 });
 export type ContentIntakeData = z.infer<typeof contentIntakeDataSchema>;
 export type ContentDetailData = z.infer<typeof contentDetailDataSchema>;
 export type PublicContentPost = z.infer<typeof publicContentPostSchema>;
+export type OpportunityFacets = NonNullable<z.infer<typeof publicContentDataSchema>['facets']>;

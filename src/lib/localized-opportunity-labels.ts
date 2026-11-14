@@ -27,6 +27,20 @@ export const localizedOpportunityCategoryLabels = (locale: 'ru' | 'kk') =>
 export const localizedSpecialtyLabels = (locale: 'ru' | 'kk') =>
   locale === 'kk' ? specialtyLabelsKk : specialtyLabels;
 
+export function localizedOpportunityConditionLabels(locale: 'ru' | 'kk') {
+  return locale === 'kk'
+    ? {
+        workMode: { remote: 'Қашықтан', hybrid: 'Аралас', in_person: 'Офлайн' },
+        payStatus: { paid: 'Төлем төленеді', unpaid: 'Төлем төленбейді' },
+        kazakhstanEligible: 'Қазақстаннан қатысу расталған',
+      }
+    : {
+        workMode: { remote: 'Удалённо', hybrid: 'Гибридно', in_person: 'Очно' },
+        payStatus: { paid: 'С оплатой', unpaid: 'Без оплаты' },
+        kazakhstanEligible: 'Участие из Казахстана подтверждено',
+      };
+}
+
 /** The interface language does not translate or infer the original publication language. */
 export function opportunityContentLanguage(language: string) {
   return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(language) ? language : 'und';
