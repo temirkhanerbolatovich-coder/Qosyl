@@ -44,13 +44,12 @@ test('home shows three fresh opportunities and routes to the full catalogue', as
   await page.screenshot({ path: info.outputPath('home.png'), fullPage: true });
 });
 
-test('pilot banner stays on one line and keeps its message', async ({ page }) => {
+test('pilot banner keeps the pilot, demo and payment message on every screen', async ({ page }) => {
   await page.goto('/');
   const banner = page.locator('.pilot-banner');
   await expect(banner).toContainText('Локальный пилот 18+');
-  const height = (await banner.boundingBox())!.height;
-  // One line of 12px text with padding; two lines would pass 44px.
-  expect(height).toBeLessThan(44);
+  await expect(banner).toContainText('ДЕМО');
+  await expect(banner).toContainText('Оплата — вне платформы');
 });
 
 test('projects offer quick filters for a few hours, a near deadline and no experience', async ({

@@ -1303,17 +1303,6 @@ select {
   border-color: var(--blue);
   color: var(--action-foreground);
 }
-/* Pilot banner: one line on a phone. Demo items keep their own «ДЕМО» label and
-   the payment rule stays on the projects page and in the terms. */
-@media (max-width: 640px) {
-  .pilot-banner {
-    flex-wrap: nowrap;
-    padding-block: 6px;
-  }
-  .pilot-banner .banner-detail {
-    display: none;
-  }
-}
 /* Favorites: a compare bar, and note and reminder in a disclosure on each card. */
 .compare-bar {
   position: sticky;

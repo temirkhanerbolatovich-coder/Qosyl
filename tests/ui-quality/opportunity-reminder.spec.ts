@@ -58,6 +58,7 @@ test('saved opportunity offers a deadline reminder only when a deadline is known
     });
   });
   await page.goto('/opportunities/saved');
+  await expect(page.getByRole('article')).toHaveCount(2);
   for (const summary of await page.getByText('Заметка и напоминание').all()) await summary.click();
   const select = page.getByLabel('Напомнить о сроке подачи');
   // Only the card with a confirmed deadline gets the control.
