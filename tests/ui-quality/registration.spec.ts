@@ -8,8 +8,12 @@ for (const locale of ['ru', 'kk'] as const) {
     page,
   }, info) => {
     await page.goto('/auth/register');
+    const menu = page.locator('button[aria-controls="header-navigation"]');
+    if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) === 'false')
+      await menu.click();
     await page.locator('.locale-switch select').selectOption(locale);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    if (await menu.isVisible()) await menu.click();
     const email = page.locator('main form').filter({ has: page.locator('input[name="email"]') });
     const google = page.locator('main form').filter({
       has: page.getByRole('button', {

@@ -71,7 +71,7 @@ async function inspect(page: Page, info: TestInfo, name: string) {
   ).toEqual([]);
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true });
 }
-const empty = { data: { posts: [] } };
+const empty = { data: { posts: [], total: 0 } };
 
 test('F06a: language defaults, SSR cookie, keyboard selection and persistence', async ({
   page,
@@ -238,12 +238,7 @@ test('F06a: opportunity loading, empty and failed responses stay distinct in Kaz
   release();
   await expect(loading).toHaveCount(0);
   await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
-  await expect(
-    page.getByText(
-      'Сұрауыңыз бойынша жарияланған материал әзірше жоқ. Жаңа материалдарды алдымен әкімші тексереді.',
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(page.getByText('Қазір өзекті жарияланымдар жоқ.', { exact: true })).toBeVisible();
   await info.attach('empty-opportunities-copy', {
     body: await page.locator('main').innerText(),
     contentType: 'text/plain',

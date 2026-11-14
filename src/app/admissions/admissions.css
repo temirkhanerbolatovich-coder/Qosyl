@@ -1,0 +1,45 @@
+.admissions-page {
+  display: grid;
+  gap: 32px;
+}
+.admissions-intro {
+  max-width: 780px;
+}
+.admissions-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.admissions-nav a {
+  color: var(--action-text);
+  font-weight: 600;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.admissions-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px;
+}
+.admissions-cards .panel + .panel {
+  margin: 0;
+}
+.admissions-checklist {
+  display: grid;
+  gap: 12px;
+}
+.admissions-checklist .check-label input {
+  width: 20px;
+  height: 20px;
+}
+@media print {
+  .admissions-page .button,
+  .admissions-nav {
+    display: none;
+  }
+  .admissions-page .panel {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

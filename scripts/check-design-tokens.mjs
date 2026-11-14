@@ -11,6 +11,8 @@ function luminance(hex) {
 }
 const pairs = [
   ['text-primary', 'surface', 4.5],
+  ['text-primary', 'background', 4.5],
+  ['text-primary', 'surface-elevated', 4.5],
   ['text-secondary', 'surface', 4.5],
   ['text-secondary', 'background', 4.5],
   ['text-secondary', 'surface-elevated', 4.5],
@@ -18,10 +20,16 @@ const pairs = [
   ['action-text', 'surface', 4.5],
   ['action-text', 'background', 4.5],
   ['action-text', 'action-background', 4.5],
+  ['action-text', 'accent', 4.5],
   ['action-foreground', 'action', 4.5],
   ['action-foreground', 'action-hover', 4.5],
   ['control-border', 'surface', 3],
+  ['control-border', 'surface-elevated', 3],
+  ['action-border', 'surface', 3],
+  ['action-border', 'action-background', 3],
   ['focus', 'surface', 3],
+  ['focus', 'background', 3],
+  ['focus', 'surface-elevated', 3],
   ...['success', 'warning', 'error', 'info'].flatMap((status) => [
     [status, `${status}-background`, 4.5],
     [status, `${status}-hover`, 4.5],

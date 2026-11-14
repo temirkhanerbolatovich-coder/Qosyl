@@ -2,14 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import {
-  ArrowRight,
-  Check,
-  FileCheck2,
-  Search,
-  ShieldCheck,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { Search, SlidersHorizontal } from 'lucide-react';
 import { localizedCategoryLabels } from '@/lib/localized-labels';
 import { EmptyState, LoadState, PageHeading, ProjectCard, useData } from './platform';
 import { Opportunities } from './opportunities';
@@ -17,100 +10,75 @@ import { useI18n } from './locale-provider';
 
 export function HomeScreen({ localMode }: { localMode: boolean }) {
   const { locale, t } = useI18n();
-  const categoryLabels = localizedCategoryLabels(locale);
-  const { data, error, loading, refresh } = useData('catalog');
+  const categories = [
+    ['internship', t('Стажировки', 'Тағылымдамалар')],
+    ['grant', t('Гранты', 'Гранттар')],
+    ['scholarship', t('Стипендии', 'Шәкіртақылар')],
+    ['competition', t('Конкурсы', 'Байқаулар')],
+    ['event', t('Мероприятия', 'Іс-шаралар')],
+  ];
   return (
     <div lang={locale}>
-      <section className="home-hero">
-        <div className="container hero-grid">
-          <div>
-            <h1>
-              {t('Первый опыт —', 'Алғашқы тәжірибе —')}
-              <br />
-              {t('в реальном проекте', 'нақты жобада')}
-            </h1>
-            <p className="hero-description">
-              {t(
-                'Находи понятные задачи от бизнеса, работай в удобном формате и собирай портфолио с подтверждением заказчика.',
-                'Бизнестің нақты тапсырмаларын тауып, ыңғайлы форматта жұмыс істе және тапсырыс беруші растаған жұмыстардан портфолио жина.',
-              )}
-            </p>
+      <section className="home-hero discovery-hero">
+        <div className="container stack">
+          <h1>
+            {t(
+              'Возможности для учёбы и первого опыта',
+              'Оқуға және алғашқы тәжірибе жинауға арналған мүмкіндіктер',
+            )}
+          </h1>
+          <form className="discovery-search" role="search" action="/opportunities" method="get">
+            <label htmlFor="home-search">{t('Поиск возможностей', 'Мүмкіндіктерді іздеу')}</label>
             <div className="button-row">
-              <Link className="button" href="/projects">
-                {t('Найти проект', 'Жоба табу')}
-                <ArrowRight size={17} />
+              <input
+                id="home-search"
+                type="search"
+                name="q"
+                maxLength={100}
+                placeholder={t(
+                  'Например, разработка или дизайн',
+                  'Мысалы, бағдарламалау немесе дизайн',
+                )}
+              />
+              <button className="button" type="submit">
+                <Search size={17} aria-hidden="true" />
+                {t('Найти', 'Іздеу')}
+              </button>
+            </div>
+          </form>
+          <nav className="home-categories" aria-label={t('Тип возможности', 'Мүмкіндік түрі')}>
+            {categories.map(([id, label]) => (
+              <Link key={id} className="category-chip" href={`/opportunities?category=${id}`}>
+                {label}
               </Link>
-              <Link className="button secondary" href="/client/projects/new">
-                {t('Разместить задачу', 'Тапсырма жариялау')}
-              </Link>
-            </div>
-            <div className="hero-note">
-              <span>
-                <Check size={13} />
-                {t('Бесплатные отклики', 'Тегін өтінімдер')}
-              </span>
-              <span>
-                <Check size={13} />
-                {t('Можно без опыта', 'Тәжірибесіз бастауға болады')}
-              </span>
-              <span>
-                <Check size={13} />
-                {t('Пилот 18+', 'Пилот 18+')}
-              </span>
-            </div>
-          </div>
-          <div className="hero-journey" aria-label={t('Как устроена работа', 'Жұмыс қалай жүреді')}>
-            <div className="journey-heading">
-              <span>
-                {t('От задачи до записи в портфолио', 'Тапсырмадан портфолиодағы жұмысқа дейін')}
-              </span>
-              <FileCheck2 size={17} />
-            </div>
-            {[
-              {
-                title: t('Найди свою задачу', 'Өзіңе сай тапсырманы тап'),
-                text: t(
-                  'Бюджет, часы и результат видны заранее.',
-                  'Бюджет, уақыт пен нәтиже алдын ала көрсетіледі.',
-                ),
-              },
-              {
-                title: t('Договорись об условиях', 'Шарттарды келіс'),
-                text: t(
-                  'Работа начинается после двух подтверждений.',
-                  'Жұмыс екі тарап та растағаннан кейін басталады.',
-                ),
-              },
-              {
-                title: t('Сдай и получи подтверждение', 'Нәтижені тапсырып, растау ал'),
-                text: t(
-                  'Заказчик принимает результат. Оплата — отдельно.',
-                  'Тапсырыс беруші нәтижені қабылдайды. Төлем бөлек жүргізіледі.',
-                ),
-              },
-            ].map((item, index) => (
-              <div className="journey-step" key={item.title}>
-                <span className="step-number">0{index + 1}</span>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.text}</p>
-                </div>
-              </div>
             ))}
-          </div>
+          </nav>
+        </div>
+      </section>
+      <Opportunities />
+      <section className="home-section">
+        <div className="container stack">
+          <h2>{t('Готовитесь к поступлению?', 'Оқуға түсуге дайындалып жүрсіз бе?')}</h2>
+          <p className="muted">
+            {t(
+              'Разберитесь в требованиях, подготовьте документы и опишите свой опыт.',
+              'Талаптарды анықтап, құжаттарыңызды дайындаңыз және тәжірибеңізді сипаттаңыз.',
+            )}
+          </p>
+          <Link className="text-link" href="/admissions">
+            {t('Гид по поступлению →', 'Оқуға түсу нұсқаулығы →')}
+          </Link>
         </div>
       </section>
       <section className="home-section">
-        <div className="container">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">{t('С чего начнём?', 'Неден бастаймыз?')}</p>
-              <h2>{t('Проекты под твои навыки', 'Дағдыларыңа сай жобалар')}</h2>
-            </div>
-            <Link className="text-link" href="/projects">
-              {t('Все проекты →', 'Барлық жобалар →')}
-            </Link>
-          </div>
+        <div className="container stack">
+          <h2>{t('Проекты от заказчиков', 'Тапсырыс берушілердің жобалары')}</h2>
+          <p className="muted">
+            {t(
+              'Пилот 18+. Выберите задачу или предложите свою. Расчёты проходят вне платформы: Qosyl не удерживает и не гарантирует оплату.',
+              'Пилот 18+. Тапсырманы таңдаңыз немесе өз тапсырмаңызды ұсыныңыз. Есеп айырысу платформадан тыс жүргізіледі: Qosyl ақшаны ұстамайды және төлемге кепілдік бермейді.',
+            )}
+          </p>
           <p className="muted small-text">
             {localMode
               ? t(
@@ -122,112 +90,14 @@ export function HomeScreen({ localMode }: { localMode: boolean }) {
                   'Оқу мысалдары «ДЕМО» белгісімен көрсетіліп, нақты тапсырыстардан бөлінген.',
                 )}
           </p>
-          <div className="home-categories">
-            {Object.entries(categoryLabels)
-              .slice(0, 6)
-              .map(([id, label]) => (
-                <Link className="category-chip" href={`/projects?category=${id}`} key={id}>
-                  {label}
-                </Link>
-              ))}
+          <div className="button-row">
+            <Link className="button secondary" href="/projects">
+              {t('Найти проект', 'Жоба табу')}
+            </Link>
+            <Link className="text-link" href="/client/projects/new">
+              {t('Разместить задачу', 'Тапсырма жариялау')}
+            </Link>
           </div>
-          {loading ? (
-            <LoadState />
-          ) : error ? (
-            <LoadState error={error} retry={refresh} />
-          ) : data?.projects.length ? (
-            <div className="projects-grid">
-              {data.projects.slice(0, 6).map((p) => (
-                <ProjectCard project={p} key={p.id} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState title={t('Пока нет открытых проектов', 'Әзірге ашық жобалар жоқ')}>
-              {t(
-                'Новые задачи появятся здесь после проверки модератором.',
-                'Жаңа тапсырмалар модератор тексергеннен кейін осында пайда болады.',
-              )}
-            </EmptyState>
-          )}
-          <div className="home-trust">
-            <div className="trust-item">
-              <ShieldCheck size={22} />
-              <div>
-                <h3>{t('Понятные условия', 'Түсінікті шарттар')}</h3>
-                <p>
-                  {t(
-                    'Модерация до публикации. Результат и критерии приёмки — до начала работы.',
-                    'Жариялауға дейін модерациядан өтеді. Нәтиже мен қабылдау өлшемдері жұмыс басталғанша келісіледі.',
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="trust-item">
-              <FileCheck2 size={22} />
-              <div>
-                <h3>{t('Подтверждаемый опыт', 'Расталатын тәжірибе')}</h3>
-                <p>
-                  {t(
-                    'Принятые проекты отделены от самостоятельно добавленных работ.',
-                    'Қабылданған жобалар өзің қосқан жұмыстардан бөлек көрсетіледі.',
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="trust-item">
-              <Check size={22} />
-              <div>
-                <h3>{t('Без скрытых обещаний', 'Жасырын уәделерсіз')}</h3>
-                <p>
-                  {t(
-                    'Расчёты проходят вне платформы. Сервис не удерживает и не гарантирует оплату.',
-                    'Есеп айырысу платформадан тыс жүргізіледі. Сервис ақшаны ұстамайды және төлемге кепілдік бермейді.',
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      <Opportunities />
-      <section
-        className="home-section faq-section"
-        aria-label={t('Вопросы о платформе', 'Платформа туралы сұрақтар')}
-      >
-        <div className="container">
-          <h2>{t('Перед первым проектом', 'Алғашқы жоба алдында')}</h2>
-          <details>
-            <summary>
-              {t('Можно откликаться без опыта?', 'Тәжірибесіз өтінім беруге бола ма?')}
-            </summary>
-            <p>
-              {t(
-                'Да. Добавьте свои навыки и объясните, как подойдёте к задаче. Для первого отклика не нужны отзывы или завершённые проекты.',
-                'Иә. Дағдыларыңызды қосып, тапсырманы қалай орындайтыныңызды түсіндіріңіз. Алғашқы өтінімге пікірлер немесе аяқталған жобалар қажет емес.',
-              )}
-            </p>
-          </details>
-          <details>
-            <summary>{t('Как проходит оплата?', 'Төлем қалай жүргізіледі?')}</summary>
-            <p>
-              {t(
-                'Студент и заказчик рассчитываются вне платформы. Qosyl фиксирует заявления сторон, не хранит деньги и не гарантирует выплату.',
-                'Студент пен тапсырыс беруші платформадан тыс есеп айырысады. Qosyl тараптардың мәлімдемелерін тіркейді, ақшаны сақтамайды және төлемге кепілдік бермейді.',
-              )}
-            </p>
-          </details>
-          <details>
-            <summary>{t('Что попадёт в портфолио?', 'Портфолиоға не кіреді?')}</summary>
-            <p>
-              {t(
-                'Принятую работу можно показать с согласия обеих сторон. Самостоятельно добавленные учебные работы обозначаются отдельно.',
-                'Қабылданған жұмысты екі тараптың келісімімен көрсетуге болады. Өз бетінше қосылған оқу жұмыстары бөлек белгіленеді.',
-              )}
-            </p>
-          </details>
-          <Link className="text-link" href="/help">
-            {t('Подробнее о работе платформы', 'Платформа жұмысы туралы толығырақ')}
-          </Link>
         </div>
       </section>
     </div>

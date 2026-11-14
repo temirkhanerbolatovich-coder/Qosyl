@@ -14,6 +14,9 @@ test('client header retains logo size and separates branding from controls', asy
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
     for (const locale of ['ru', 'kk'] as const) {
+      const menu = page.locator('button[aria-controls="header-navigation"]');
+      if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) === 'false')
+        await menu.click();
       await page.locator('.locale-switch select').selectOption(locale);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await page.evaluate(() => document.fonts.ready);

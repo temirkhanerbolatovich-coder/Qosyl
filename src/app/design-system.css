@@ -129,6 +129,15 @@ h4 {
 button:disabled {
   cursor: not-allowed;
 }
+.button:disabled,
+.button.secondary:disabled,
+.button.danger:disabled,
+.button.destructive:disabled {
+  opacity: 1;
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border-color: var(--control-border);
+}
 [aria-busy='true'] {
   cursor: progress;
 }
@@ -901,7 +910,7 @@ select {
   }
 }
 
-/* One navigation with always-visible settings and account actions. */
+/* Shared navigation and account actions. */
 .site-header.qosyl-header {
   height: auto;
 }
@@ -979,34 +988,302 @@ select {
     border-top: 1px solid var(--line);
   }
 }
-@media (max-width: 700px) {
+/* Both layouts use the same navigation and account controls. */
+.header-shortcuts,
+.header-sections {
+  display: contents;
+}
+.header-shortcuts > * {
+  display: none;
+}
+@media (max-width: 900px) {
   .qosyl-header-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 64px;
+    gap: 0 8px;
+  }
+  .qosyl-header-inner .brand-name > span {
+    display: none;
+  }
+  .header-shortcuts {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px 12px;
-    padding-block: 10px;
+    align-items: center;
+    gap: 6px;
   }
-  .qosyl-header-inner .brand {
-    margin-right: auto;
+  .header-shortcuts > * {
+    display: inline-flex;
   }
-  .qosyl-header-actions {
-    order: 2;
-    width: 100%;
-    justify-content: flex-start;
-    gap: 6px 12px;
+  .header-sections {
+    display: none;
+  }
+  .header-sections[data-open='true'] {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 10px;
+    padding-block: 8px;
   }
   .qosyl-nav {
-    order: 3;
-    width: 100%;
-    gap: 0 16px;
+    grid-row: auto;
+    gap: 2px 16px;
+  }
+  .qosyl-nav .desktop-saved {
+    display: none;
+  }
+  .qosyl-header-actions {
+    justify-content: flex-start;
+    gap: 8px 12px;
   }
   .qosyl-header-actions .theme-switch select {
     width: 110px;
   }
-  .qosyl-header-actions .theme-switch > span {
-    display: none;
-  }
   .qosyl-header-actions .locale-switch select {
     width: 155px;
   }
+  .qosyl-header-actions .theme-switch > span {
+    display: none;
+  }
+}
+
+.discovery-hero h1 {
+  max-width: 20ch;
+  font-size: clamp(2rem, 4vw, 3.75rem);
+  line-height: 1.12;
+}
+.discovery-search {
+  max-width: 46rem;
+}
+.discovery-search label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.discovery-search input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.discovery-hero .home-categories {
+  margin-block: 0;
+}
+
+.opportunity-card {
+  gap: 12px;
+}
+.opportunity-list {
+  display: grid;
+  gap: var(--space-16);
+}
+.opportunity-list > .panel {
+  margin-top: 0;
+}
+.opportunity-list .opportunity-conditions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+.opportunity-results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.opportunity-sort {
+  width: min(100%, 18rem);
+}
+.opportunities-catalogue [id^='opportunity-'] {
+  scroll-margin-block-start: var(--space-16);
+}
+.opportunity-results-bar h2:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.opportunity-filter-toggle {
+  display: none;
+}
+.opportunity-filter-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 44px;
+}
+.checkbox-row input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.opportunity-compare-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.opportunity-compare {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+.opportunity-compare th,
+.opportunity-compare td {
+  padding: var(--space-8) 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.opportunity-compare tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* On a phone every condition becomes a block that lists the cards one under another. Explicit
+   ARIA roles keep the table semantics that display:block would otherwise remove. */
+@media (max-width: 700px) {
+  .opportunity-compare {
+    min-width: 0;
+  }
+  .opportunity-compare,
+  .opportunity-compare tbody,
+  .opportunity-compare tr,
+  .opportunity-compare th,
+  .opportunity-compare td {
+    display: block;
+  }
+  .opportunity-compare thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .opportunity-compare tbody tr {
+    padding-block: var(--space-8);
+    border-bottom: 1px solid var(--border);
+  }
+  .opportunity-compare th,
+  .opportunity-compare td {
+    padding: 4px 0;
+    border-bottom: 0;
+  }
+  .opportunity-compare tbody th {
+    white-space: normal;
+  }
+  .opportunity-compare td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+}
+.opportunity-similar {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.opportunity-similar li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.search-box {
+  position: relative;
+}
+.search-suggestions {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-8);
+  margin-top: 4px;
+  padding: var(--space-8);
+  background: var(--surface-elevated);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow);
+}
+.search-suggestions p {
+  margin: 0;
+}
+.search-suggestions ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.search-suggestions li[role='option'] {
+  padding: 10px 12px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-small);
+  color: var(--text-primary);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.search-suggestions li[role='option']:hover {
+  background: var(--action-background);
+}
+.search-suggestions li[role='option'][aria-selected='true'] {
+  background: var(--action-background);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.opportunity-applied-filters ul,
+.opportunity-quick-filters ul,
+.opportunity-relaxed-filters {
+  gap: var(--space-8);
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+}
+.opportunity-applied-filters li,
+.opportunity-quick-filters li,
+.opportunity-relaxed-filters li {
+  min-width: 0;
+  max-width: 100%;
+}
+.opportunity-quick-filters .button,
+.opportunity-relaxed-filters .button,
+.opportunity-applied-filters .button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.opportunity-applied-filters svg {
+  flex: none;
+}
+@media (max-width: 800px) {
+  .opportunity-filter-toggle {
+    display: inline-flex;
+  }
+  .opportunity-filter-details[data-open='false'] {
+    display: none;
+  }
+}
+.opportunity-conditions {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.opportunity-conditions div {
+  min-width: 0;
+}
+.opportunity-conditions dt {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.opportunity-conditions dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }

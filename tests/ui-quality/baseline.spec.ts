@@ -71,7 +71,11 @@ for (const [name, route] of [
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
     // Wait for the real catalogue response rather than a screenshot of its loading skeleton.
-    if (name === 'home' || name === 'projects')
+    if (name === 'home') {
+      await expect(page.locator('.opportunities-section')).toBeVisible();
+      await expect(page.getByText('Ищем возможности…', { exact: true })).toHaveCount(0);
+    }
+    if (name === 'projects')
       await expect(page.getByText('Загрузка…', { exact: true })).toHaveCount(0);
     if (name === 'opportunities')
       await expect(page.getByRole('form', { name: 'Поиск возможностей' })).toBeVisible();

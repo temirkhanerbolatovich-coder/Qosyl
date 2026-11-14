@@ -41,17 +41,18 @@ test('opportunities: slow response is loading, not empty; identical search compl
   try {
     await page.goto('/opportunities');
     await expect(page.getByRole('status')).toHaveText('Ищем возможности…');
-    await expect(page.getByText(/Опубликованных материалов по запросу пока нет/)).toHaveCount(0);
+    await expect(page.getByText('Сейчас нет актуальных публикаций.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Далее', exact: true })).toBeDisabled();
     await checkState(page, info, 'opportunities-loading');
   } finally {
     release();
   }
-  await expect(page.getByText(/Опубликованных материалов по запросу пока нет/)).toBeVisible();
+  await expect(page.getByText('Сейчас нет актуальных публикаций.')).toBeVisible();
   const form = page.getByRole('form', { name: 'Поиск возможностей' });
   await form.getByRole('button', { name: 'Найти возможности' }).click();
-  await expect(page.getByRole('status')).toHaveCount(0);
-  await expect(page.getByText(/Опубликованных материалов по запросу пока нет/)).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Ищем возможности' })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Найдено: 0' })).toBeVisible();
+  await expect(page.getByText('Сейчас нет актуальных публикаций.')).toBeVisible();
   await checkState(page, info, 'opportunities-empty');
 });
 
@@ -74,6 +75,10 @@ test('opportunities: failed request offers retry and preserves entered filters',
   ).toContainText('Не удалось загрузить возможности');
   const form = page.getByRole('form', { name: 'Поиск возможностей' });
   await form.locator('[name=q]').fill('педагогика');
+  // The suggestion list overlays the controls below it until it is dismissed.
+  await form.locator('[name=q]').press('Escape');
+  const filterToggle = form.getByRole('button', { name: 'Фильтры', exact: true });
+  if (await filterToggle.isVisible()) await filterToggle.click();
   await form.locator('[name=specialty]').selectOption('education');
   await checkState(page, info, 'opportunities-error');
   fail = false;
@@ -81,7 +86,7 @@ test('opportunities: failed request offers retry and preserves entered filters',
   await expect(
     page.getByRole('region', { name: 'Возможности и события' }).getByRole('alert'),
   ).toHaveCount(0);
-  await expect(page.getByText(/Опубликованных материалов по запросу пока нет/)).toBeVisible();
+  await expect(page.getByText('Сейчас нет актуальных публикаций.')).toBeVisible();
   await expect(form.locator('[name=q]')).toHaveValue('педагогика');
   await expect(form.locator('[name=specialty]')).toHaveValue('education');
 });
@@ -113,8 +118,20 @@ test('catalogue: mobile disclosure preserves input, applies URL filters and rese
 
 test('navigation: links are visible once and usable by keyboard', async ({ page }) => {
   await page.goto('/');
+  const menu = page.locator('button[aria-controls="header-navigation"]');
+  if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) === 'false')
+    await menu.click();
   const nav = page.getByRole('navigation', { name: 'Основная навигация' });
   const projects = nav.getByRole('link', { name: 'Проекты', exact: true });
+  if (await menu.isVisible()) {
+    await projects.focus();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeFocused();
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await expect(nav).toBeHidden();
+    expect((await page.locator('header').boundingBox())!.height).toBeLessThanOrEqual(84);
+    await page.keyboard.press('Enter');
+  }
   await expect(projects).toBeVisible();
   await expect(page.locator('header a[href="/projects"]')).toHaveCount(1);
   await projects.focus();

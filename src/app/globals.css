@@ -206,13 +206,13 @@ hr {
   border-color: var(--blue-dark);
 }
 .button.secondary {
-  background: var(--surface);
-  color: var(--ink);
-  border-color: var(--line);
+  background: var(--action-background);
+  color: var(--action-text);
+  border-color: var(--action-border);
 }
 .button.secondary:hover {
-  background: var(--surface-elevated);
-  border-color: var(--control-border);
+  background: var(--accent);
+  border-color: var(--action-text);
 }
 .button.danger {
   background: var(--surface);
