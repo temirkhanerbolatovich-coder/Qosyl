@@ -230,11 +230,15 @@ export function EmptyState({
   children,
   href,
   action,
+  details,
+  secondaryActions,
 }: {
   title: string;
   children?: React.ReactNode;
   href?: string;
   action?: string;
+  details?: React.ReactNode;
+  secondaryActions?: React.ReactNode;
 }) {
   return (
     <div className="panel empty-state">
@@ -243,12 +247,14 @@ export function EmptyState({
       </div>
       <h2>{title}</h2>
       <p className="muted">{children}</p>
+      {details}
       {href && (
         <Link className="button" href={href}>
           {action}
           <ArrowRight size={16} />
         </Link>
       )}
+      {secondaryActions}
     </div>
   );
 }

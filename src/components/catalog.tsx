@@ -2,9 +2,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, SlidersHorizontal } from 'lucide-react';
-import { localizedCategoryLabels } from '@/lib/localized-labels';
-import { EmptyState, LoadState, PageHeading, ProjectCard, useData } from './platform';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { localizedCategoryLabels, localizedModeLabels } from '@/lib/localized-labels';
+import { EmptyState, LoadState, PageHeading, ProjectCard, useData, useViewer } from './platform';
 import { Opportunities } from './opportunities';
 import { useI18n } from './locale-provider';
 
@@ -110,13 +110,51 @@ export function HomeScreen({ localMode }: { localMode: boolean }) {
 }
 export function CatalogScreen() {
   const { locale, t } = useI18n();
+  const viewer = useViewer();
   const categoryLabels = localizedCategoryLabels(locale);
+  const modeLabels = localizedModeLabels(locale);
   const params = useSearchParams();
   const router = useRouter();
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState(params.get('q') ?? '');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const query = params.toString();
+  const filterValues = Object.fromEntries(
+    [...params.entries()].filter(([, value]) => value.trim() !== ''),
+  );
+  const filterNames: Record<string, string> = {
+    q: t('Поиск', 'Іздеу'),
+    category: t('Категория', 'Санат'),
+    skill: t('Навык', 'Дағды'),
+    mode: t('Формат', 'Формат'),
+    city: t('Город', 'Қала'),
+    minBudget: t('Бюджет от', 'Ең аз бюджет'),
+    maxBudget: t('Бюджет до', 'Ең көп бюджет'),
+    difficulty: t('Уровень', 'Деңгей'),
+    maxHours: t('Не больше часов', 'Ең көп сағат саны'),
+    dueBefore: t('Дедлайн до', 'Аяқтау мерзімі'),
+  };
+  const activeFilters = Object.entries(filterNames).flatMap(([key, name]) => {
+    const value = filterValues[key]?.trim();
+    if (!value) return [];
+    const label =
+      key === 'category'
+        ? categoryLabels[value]
+        : key === 'mode'
+          ? modeLabels[value]
+          : key === 'difficulty'
+            ? value === 'beginner_friendly'
+              ? t('Можно без опыта', 'Тәжірибесіз бастауға болады')
+              : t('Есть базовый опыт', 'Негізгі тәжірибесі бар')
+            : value;
+    return [{ key, label: `${name}: ${label ?? value}` }];
+  });
+  function withoutParameter(key: string) {
+    const next = new URLSearchParams(query);
+    next.delete(key);
+    next.delete('page');
+    return `/projects${next.size ? `?${next}` : ''}`;
+  }
   useEffect(() => {
     if (!searchTimer.current) setSearch(new URLSearchParams(query).get('q') ?? '');
   }, [query]);
@@ -390,15 +428,69 @@ export function CatalogScreen() {
                 <ProjectCard key={p.id} project={p} />
               ))}
             </div>
-          ) : (
+          ) : data && data.total > 0 ? (
+            <EmptyState
+              title={t('На этой странице проектов нет', 'Бұл бетте жобалар жоқ')}
+              href={withoutParameter('page')}
+              action={t('К первой странице', 'Бірінші бетке өту')}
+            />
+          ) : activeFilters.length > 0 ? (
             <EmptyState
               title={t('Подходящих проектов пока нет', 'Әзірге сәйкес жобалар жоқ')}
               href="/projects"
               action={t('Сбросить фильтры', 'Сүзгілерді тазарту')}
+              details={
+                <div className="opportunity-applied-filters">
+                  <p>{t('Применённые фильтры', 'Қолданылған сүзгілер')}</p>
+                  <ul
+                    className="button-row"
+                    aria-label={t('Применённые фильтры', 'Қолданылған сүзгілер')}
+                  >
+                    {activeFilters.map(({ key, label }) => (
+                      <li key={key}>
+                        <Link
+                          className="button secondary"
+                          href={withoutParameter(key)}
+                          scroll={false}
+                          aria-label={t(
+                            `Удалить фильтр: ${label}`,
+                            `Сүзгіні алып тастау: ${label}`,
+                          )}
+                        >
+                          {label} <X size={16} aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              }
             >
               {t(
                 'Попробуйте другой навык, формат или более широкий бюджет.',
                 'Басқа дағдыны, форматты немесе кеңірек бюджет ауқымын қолданып көріңіз.',
+              )}
+            </EmptyState>
+          ) : (
+            <EmptyState
+              title={t('Сейчас открытых проектов нет', 'Қазір ашық жобалар жоқ')}
+              href="/opportunities"
+              action={t('Стажировки и возможности', 'Тағылымдамалар мен мүмкіндіктер')}
+              secondaryActions={
+                <>
+                  <Link className="button secondary" href="/client/projects/new">
+                    {t('Разместить задачу', 'Тапсырма жариялау')}
+                  </Link>
+                  {viewer?.roles.includes('student') && (
+                    <Link className="text-link" href="/student/profile">
+                      {t('Заполнить профиль', 'Профильді толтыру')}
+                    </Link>
+                  )}
+                </>
+              }
+            >
+              {t(
+                'Новые проекты появляются после проверки модератором.',
+                'Жаңа жобалар модератор тексергеннен кейін пайда болады.',
               )}
             </EmptyState>
           )}
