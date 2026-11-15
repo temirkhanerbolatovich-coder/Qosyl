@@ -56,10 +56,13 @@ export function ProfileForm({
   user,
   onboarding = false,
   preferredRole,
+  next,
 }: {
   user: ProfileData;
   onboarding?: boolean;
   preferredRole?: string;
+  /** A same-site path already checked on the server; where onboarding continues after saving. */
+  next?: string;
 }) {
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -138,7 +141,7 @@ export function ProfileForm({
         setFailure(profileFailureFromResponse(response.status, result));
         return;
       }
-      if (onboarding) router.push('/dashboard');
+      if (onboarding) router.push(next ?? '/dashboard');
       else setSaved(true);
       router.refresh();
     } catch {

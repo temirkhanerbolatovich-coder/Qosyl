@@ -1,20 +1,22 @@
 import { requireUser } from '@/lib/session';
+import { parseNext } from '@/lib/safe-next';
 import { ProfileForm } from '@/app/student/profile/profile-form';
 import { ProfileHeading } from '@/components/profile-heading';
 
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string }>;
+  searchParams: Promise<{ role?: string; next?: string }>;
 }) {
   const user = await requireUser();
-  const { role } = await searchParams;
+  const { role, next } = await searchParams;
   return (
     <div className="container page-shell">
       <ProfileHeading onboarding />
       <ProfileForm
         onboarding
         preferredRole={role}
+        next={parseNext(next) ?? undefined}
         user={{
           id: user.id,
           name: user.name,

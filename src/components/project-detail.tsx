@@ -1,7 +1,7 @@
 'use client';
 import { useMarketplaceCopy } from './marketplace-copy';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { date, lines, money } from '@/lib/labels';
+import { authPath } from '@/lib/safe-next';
 import { localizedCategoryLabels, localizedModeLabels } from '@/lib/localized-labels';
 import {
   ActionFeedback,
@@ -74,6 +75,14 @@ export function ProjectDetailScreen({ id }: { id: string }) {
   const { data, loading, error, notFound, refresh } = useData('project', { id });
   const action = useAction(refresh);
   const [works, setWorks] = useState<ExternalWork[]>([]);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const canApply = Boolean(data?.canApply);
+  useEffect(() => {
+    // Coming back from sign-up with ?apply=1: put the person straight into the application form.
+    if (!canApply || new URLSearchParams(window.location.search).get('apply') !== '1') return;
+    messageRef.current?.focus();
+    messageRef.current?.scrollIntoView({ block: 'center' });
+  }, [canApply]);
   useEffect(() => {
     if (viewer?.roles.includes('student'))
       void fetch('/api/profile')
@@ -380,11 +389,20 @@ export function ProjectDetailScreen({ id }: { id: string }) {
             </dl>
             {!viewer ? (
               <>
-                <Link className="button full" href="/auth/register">
+                <Link
+                  className="button full"
+                  href={authPath('/auth/register', `/projects/${id}?apply=1`)}
+                >
                   {copy('Откликнуться бесплатно')} <ArrowRight size={16} />
                 </Link>
                 <p className="small-text muted" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {copy('Войдите или создайте профиль исполнителя.')}
+                  {copy('Войдите или создайте профиль исполнителя.')}{' '}
+                  <Link
+                    className="text-link"
+                    href={authPath('/auth/login', `/projects/${id}?apply=1`)}
+                  >
+                    {locale === 'kk' ? 'Аккаунтым бар, кіру' : 'У меня уже есть аккаунт'}
+                  </Link>
                 </p>
               </>
             ) : !owner && !assigned && !viewer.roles.includes('student') ? (
@@ -403,6 +421,7 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                 <label className="field">
                   {active ? copy('Ваше сообщение') : copy('Коротко о себе и подходе')}
                   <textarea
+                    ref={messageRef}
                     name="message"
                     required
                     minLength={20}

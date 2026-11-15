@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { ArrowRight, CheckCircle2, Clock3, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useI18n } from '@/components/locale-provider';
+import { authPath, DEFAULT_NEXT, onboardingPath } from '@/lib/safe-next';
 import {
   authFeedbackText,
   authMessage,
@@ -76,12 +77,15 @@ export function AuthForm({
   token,
   googleEnabled = false,
   googleError = false,
+  next,
 }: {
   mode: Mode;
   localMode: boolean;
   token?: string;
   googleEnabled?: boolean;
   googleError?: boolean;
+  /** A same-site path already checked on the server; where to go after signing in or up. */
+  next?: string;
 }) {
   const router = useRouter();
   const { locale, t } = useI18n();
@@ -110,9 +114,9 @@ export function AuthForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'google',
-          callbackURL: '/dashboard',
-          newUserCallbackURL: '/onboarding',
-          errorCallbackURL: '/auth/login?googleError=1',
+          callbackURL: next ?? DEFAULT_NEXT,
+          newUserCallbackURL: onboardingPath(next),
+          errorCallbackURL: `/auth/login?googleError=1${next ? `&next=${encodeURIComponent(next)}` : ''}`,
           requestSignUp: mode === 'register',
           additionalData: {
             adultConfirmed: form.get('adultConfirmed') === 'on',
@@ -169,7 +173,9 @@ export function AuthForm({
               password,
               adultConfirmed: form.get('adultConfirmed') === 'on',
               privacyConsent: form.get('privacyConsent') === 'on',
-              callbackURL: `${window.location.origin}/dashboard`,
+              // After the email is confirmed the person is signed in and, as a new account, still
+              // needs a role, so continue through onboarding to the page they were heading to.
+              callbackURL: `${window.location.origin}${next ? onboardingPath(next) : DEFAULT_NEXT}`,
             }
           : mode === 'forgot'
             ? { email, redirectTo: `${window.location.origin}/auth/reset-password` }
@@ -204,7 +210,7 @@ export function AuthForm({
         return;
       }
       if (mode === 'login' || (mode === 'register' && localMode)) {
-        router.push(mode === 'register' ? '/onboarding' : '/dashboard');
+        router.push(mode === 'register' ? onboardingPath(next) : (next ?? DEFAULT_NEXT));
         router.refresh();
       } else if (mode === 'register') {
         setSuccess('confirmEmail');
@@ -300,6 +306,14 @@ export function AuthForm({
                 'Google арқылы кіру мүмкін болмады. Алдымен Google арқылы тіркеліңіз. Егер email бұрын қолданылса, әдеттегі жолмен кіріңіз.',
               )}
             </div>
+          )}
+          {next && (mode === 'login' || mode === 'register') && (
+            <p className="muted" data-testid="auth-next-note">
+              {t(
+                'После входа вернём вас на страницу, которую вы открывали.',
+                'Кіргеннен кейін сізді ашқан бетіңізге қайтарамыз.',
+              )}
+            </p>
           )}
           {success && (
             <div className="alert success" role="status">
@@ -512,11 +526,13 @@ export function AuthForm({
                 </Link>
                 <p>
                   {t('Ещё нет аккаунта?', 'Аккаунтыңыз жоқ па?')}{' '}
-                  <Link href="/auth/register">{t('Зарегистрироваться', 'Тіркелу')}</Link>
+                  <Link href={authPath('/auth/register', next)}>
+                    {t('Зарегистрироваться', 'Тіркелу')}
+                  </Link>
                 </p>
               </>
             ) : (
-              <Link href="/auth/login">
+              <Link href={authPath('/auth/login', next)}>
                 {t('Уже есть аккаунт? Войти', 'Аккаунтыңыз бар ма? Кіру')}
               </Link>
             )}
