@@ -332,7 +332,7 @@ export function DashboardScreen({
             <aside>
               <section className="panel" aria-label={copy('Уведомления')}>
                 <div className="section-title">
-                  <h2 style={{ fontSize: 18 }}>{copy('Уведомления')}</h2>
+                  <h2 className="text-h4">{copy('Уведомления')}</h2>
                   <FileText size={17} className="muted" />
                 </div>
                 <p className="muted small-text">
@@ -387,7 +387,7 @@ export function DashboardScreen({
                 )}
               </section>
               <section className="panel">
-                <h2 style={{ fontSize: 18 }}>{copy('Следующий шаг')}</h2>
+                <h2 className="text-h4">{copy('Следующий шаг')}</h2>
                 <p className="small-text muted">
                   {client
                     ? copy(

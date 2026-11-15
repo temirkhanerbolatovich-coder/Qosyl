@@ -103,7 +103,7 @@ export default function HelpPage() {
         </section>
         <aside className="stack">
           <section className="panel">
-            <h2 style={{ fontSize: 19 }}>{copy('Что значит «подтверждено»')}</h2>
+            <h2 className="text-h4">{copy('Что значит «подтверждено»')}</h2>
             <p className="small-text muted">
               <CheckCircle2 size={15} style={{ display: 'inline', verticalAlign: 'middle' }} />{' '}
               {copy('Client-confirmed — заказчик принял результат на платформе.')}
@@ -120,7 +120,7 @@ export default function HelpPage() {
             </p>
           </section>
           <section className="panel">
-            <h2 style={{ fontSize: 19 }}>{copy('Как проходит оплата')}</h2>
+            <h2 className="text-h4">{copy('Как проходит оплата')}</h2>
             <p className="small-text muted">
               {copy(
                 'Напрямую между участниками по договорённости. Заказчик отмечает отправку, студент отдельно подтверждает получение.',

@@ -102,5 +102,75 @@
       "exit": "cubic-bezier(0.4, 0, 1, 1)",
       "move": "cubic-bezier(0.4, 0, 0.2, 1)"
     }
+  },
+  "typography": {
+    "display": {
+      "family": "heading",
+      "size": "clamp(2.125rem, 4.2vw, 3.5rem)",
+      "line": 1.12,
+      "weight": 700,
+      "tracking": "-0.025em"
+    },
+    "h1": {
+      "family": "heading",
+      "size": "clamp(2rem, 3.2vw, 2.75rem)",
+      "line": 1.15,
+      "weight": 700,
+      "tracking": "-0.025em"
+    },
+    "h2": {
+      "family": "heading",
+      "size": "clamp(1.5rem, 2.2vw, 2rem)",
+      "line": 1.2,
+      "weight": 700,
+      "tracking": "-0.025em"
+    },
+    "h3": {
+      "family": "heading",
+      "size": "1.375rem",
+      "line": 1.25,
+      "weight": 700,
+      "tracking": "-0.025em"
+    },
+    "h4": {
+      "family": "heading",
+      "size": "1.125rem",
+      "line": 1.3,
+      "weight": 700,
+      "tracking": "-0.025em"
+    },
+    "body-lg": {
+      "family": "body",
+      "size": "1.0625rem",
+      "line": 1.6,
+      "weight": 400,
+      "tracking": "0em"
+    },
+    "body": {
+      "family": "body",
+      "size": "1rem",
+      "line": 1.6,
+      "weight": 400,
+      "tracking": "0em"
+    },
+    "body-sm": {
+      "family": "body",
+      "size": "0.875rem",
+      "line": 1.5,
+      "weight": 400,
+      "tracking": "0em"
+    },
+    "caption": {
+      "family": "body",
+      "size": "0.75rem",
+      "line": 1.4,
+      "weight": 500,
+      "tracking": "0em"
+    }
+  },
+  "elevation": {
+    "flat": "none",
+    "raised": "0 1px 2px var(--shadow-color), 0 4px 12px var(--shadow-color)",
+    "overlay": "0 12px 32px var(--shadow-color)"
   }
 }

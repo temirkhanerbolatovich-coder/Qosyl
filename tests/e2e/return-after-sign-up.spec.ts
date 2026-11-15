@@ -19,13 +19,31 @@ async function command<T>(
   return readData<T>(await api.post('/api/platform', { data: { action, ...fields } }));
 }
 
+/** The server limits sign-ups per minute on purpose; wait for the window instead of switching it off. */
+async function signUp(api: APIRequestContext, data: Record<string, unknown>) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await api.post('/api/auth/sign-up/email', { data });
+    if (response.status() !== 429) return response;
+    const seconds = Number(response.headers()['x-retry-after']) || 15;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(seconds, 65) * 1000 + 500));
+  }
+  throw new Error('Sign-up stayed rate limited after waiting for the window.');
+}
+
 async function createActor(role: 'student' | 'client', name: string) {
   const api = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
   const email = `${role}-return-${name.length}-${run}@example.test`;
-  const registration = await api.post('/api/auth/sign-up/email', {
-    data: { name, email, password, adultConfirmed: true, privacyConsent: true },
+  const registration = await signUp(api, {
+    name,
+    email,
+    password,
+    adultConfirmed: true,
+    privacyConsent: true,
   });
-  expect(registration.ok()).toBe(true);
+  expect(
+    registration.ok(),
+    `Sign-up failed with HTTP ${registration.status()}: ${await registration.text()}`,
+  ).toBe(true);
   await readData(
     await api.post('/api/profile', {
       data:
@@ -101,14 +119,29 @@ function emailForm(page: import('@playwright/test').Page) {
   return page.locator('main form').filter({ has: page.locator('input[name="email"]') });
 }
 
+type Actor = Awaited<ReturnType<typeof createActor>>;
+let admin: APIRequestContext;
+let client: Actor;
+let student: Actor;
+let projectId: string;
+
+test.beforeAll(async () => {
+  test.setTimeout(180_000);
+  admin = await adminSession();
+  client = await createActor('client', 'Заказчик возврата');
+  student = await createActor('student', 'Студент возврата');
+  projectId = await publishedProject(client.api, admin);
+});
+
+test.afterAll(async () => {
+  await Promise.all([admin?.dispose(), client?.api.dispose(), student?.api.dispose()]);
+});
+
 test('a guest who starts an application is brought back to the same project after signing up', async ({
   page,
 }, testInfo) => {
   test.setTimeout(150_000);
-  const admin = await adminSession();
-  const client = await createActor('client', 'Заказчик возврата');
-  try {
-    const projectId = await publishedProject(client.api, admin);
+  {
     const projectPath = `/projects/${projectId}?apply=1`;
 
     await page.goto(`/projects/${projectId}`);
@@ -161,8 +194,6 @@ test('a guest who starts an application is brought back to the same project afte
     await expect(
       page.locator('main [role=status]').filter({ hasText: 'Отклик отправлен' }),
     ).toBeVisible();
-  } finally {
-    await Promise.all([admin.dispose(), client.api.dispose()]);
   }
 });
 
@@ -170,11 +201,7 @@ test('sign-in follows a safe return address and ignores addresses that leave the
   page,
 }) => {
   test.setTimeout(120_000);
-  const admin = await adminSession();
-  const client = await createActor('client', 'Заказчик входа');
-  const student = await createActor('student', 'Студент входа');
-  try {
-    const projectId = await publishedProject(client.api, admin);
+  {
     const projectPath = `/projects/${projectId}?apply=1`;
 
     // Addresses that point elsewhere are dropped before anything is rendered or remembered.
@@ -211,7 +238,5 @@ test('sign-in follows a safe return address and ignores addresses that leave the
     await form.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(`${baseURL}${projectPath}`);
     await expect(page.locator('textarea[name="message"]')).toBeFocused();
-  } finally {
-    await Promise.all([admin.dispose(), client.api.dispose(), student.api.dispose()]);
   }
 });

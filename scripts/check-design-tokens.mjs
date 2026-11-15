@@ -1,4 +1,5 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { elevationProblems, typographyProblems } from './design-token-rules.mjs';
 
 const tokens = JSON.parse(await readFile('src/lib/design-tokens.json', 'utf8'));
 function luminance(hex) {
@@ -63,6 +64,14 @@ const motionProblems = [
 ];
 if (motionProblems.length) {
   console.error(`Motion tokens are invalid:\n- ${motionProblems.join('\n- ')}`);
+  process.exitCode = 1;
+}
+const shapeProblems = [
+  ...typographyProblems(tokens.typography).map((problem) => `typography: ${problem}`),
+  ...elevationProblems(tokens.elevation).map((problem) => `elevation: ${problem}`),
+];
+if (shapeProblems.length) {
+  console.error(`Typography or elevation tokens are invalid:\n- ${shapeProblems.join('\n- ')}`);
   process.exitCode = 1;
 }
 await mkdir('outputs/ui-quality', { recursive: true });

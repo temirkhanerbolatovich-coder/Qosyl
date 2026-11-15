@@ -20,6 +20,18 @@ ${Object.entries(tokens.motion.durationMs)
 ${Object.entries(tokens.motion.easing)
   .map(([name, value]) => `  --ease-${name}: ${value};`)
   .join('\n')}
+${Object.entries(tokens.typography)
+  .map(
+    ([role, token]) =>
+      `  --text-${role}-size: ${token.size};
+  --text-${role}-line: ${token.line};
+  --text-${role}-weight: ${token.weight};
+  --text-${role}-tracking: ${token.tracking};`,
+  )
+  .join('\n')}
+${Object.entries(tokens.elevation)
+  .map(([level, value]) => `  --elevation-${level}: ${value};`)
+  .join('\n')}
   --duration: var(--motion-base);
   --bg: var(--background);
   --paper: var(--surface);
@@ -44,6 +56,39 @@ ${declarations(tokens.themes.dark)}
     color-scheme: dark;
 ${declarations(tokens.themes.dark)}
   }
+}
+/* One class per text role and per surface level, so a component never sets a size by hand. */
+${Object.entries(tokens.typography)
+  .map(
+    ([role, token]) => `.text-${role} {${
+      token.family === 'heading'
+        ? '\n  font-family: var(--font-manrope), var(--font-inter), sans-serif;'
+        : ''
+    }
+  font-size: var(--text-${role}-size);
+  line-height: var(--text-${role}-line);
+  font-weight: var(--text-${role}-weight);
+  letter-spacing: var(--text-${role}-tracking);
+}`,
+  )
+  .join('\n')}
+.text-numeric {
+  font-variant-numeric: tabular-nums;
+}
+.surface-flat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--elevation-flat);
+}
+.surface-raised {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--elevation-raised);
+}
+.surface-overlay {
+  background: var(--surface);
+  border: 0;
+  box-shadow: var(--elevation-overlay);
 }
 `;
 const file = 'src/app/design-tokens.css';
