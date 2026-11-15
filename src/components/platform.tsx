@@ -7,12 +7,20 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  CircleSlash,
+  FileText,
+  Loader,
   MapPin,
+  PauseCircle,
   RefreshCw,
+  Send,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { date, money } from '@/lib/labels';
+import { getStatusDisplay } from '@/lib/status-display';
 import {
   localizedCategoryLabels,
   localizedModeLabels,
@@ -205,13 +213,26 @@ export function LoadState({ error, retry }: { error?: string; retry?: () => void
 export function StatusBadge({ status }: { status: string }) {
   const { locale } = useI18n();
   const statusLabels = localizedStatusLabels(locale);
-  const StatusIcon = ['accepted', 'completed', 'published', 'active'].includes(status)
-    ? CheckCircle2
-    : ['cancelled', 'disputed', 'rejected'].includes(status)
-      ? AlertCircle
-      : Clock3;
+  const display = getStatusDisplay(status);
+  const icons = {
+    FileText,
+    PauseCircle,
+    CircleSlash,
+    Clock3,
+    Loader,
+    Send,
+    CheckCircle2,
+    AlertTriangle,
+    ShieldAlert,
+  };
+  const StatusIcon = icons[display.icon];
   return (
-    <span className={`badge status-${status}`} lang={locale}>
+    <span
+      className={`badge status status-${status}`}
+      data-tone={display.tone}
+      data-severity={display.severity}
+      lang={locale}
+    >
       <StatusIcon size={14} aria-hidden="true" />
       {statusLabels[status] ?? status}
     </span>

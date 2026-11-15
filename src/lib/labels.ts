@@ -31,7 +31,7 @@ export const statusLabels: Record<string, string> = {
   not_selected: 'Не выбран',
   rejected: 'Не выбран',
   withdrawn: 'Отклик отозван',
-  active: 'Активен',
+  active: 'На рассмотрении',
 };
 export const paymentLabels: Record<string, string> = {
   not_reported: 'Оплата ещё не отмечена',

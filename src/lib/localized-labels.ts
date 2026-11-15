@@ -34,7 +34,7 @@ const statusLabelsKk: Record<string, string> = {
   not_selected: 'Таңдалмады',
   rejected: 'Таңдалмады',
   withdrawn: 'Өтінім қайтарылды',
-  active: 'Белсенді',
+  active: 'Қаралуда',
 };
 
 /** UI labels vary by locale; persisted category/status values remain unchanged. */

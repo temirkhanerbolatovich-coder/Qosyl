@@ -316,6 +316,36 @@ summary:focus-visible {
 .badge svg {
   flex-shrink: 0;
 }
+.badge.status[data-tone='neutral'] {
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border-color: var(--border);
+}
+.badge.status[data-tone='info'] {
+  color: var(--info);
+  background: var(--info-background);
+  border-color: var(--info-border);
+}
+.badge.status[data-tone='progress'] {
+  color: var(--action-text);
+  background: var(--action-background);
+  border-color: var(--action-border);
+}
+.badge.status[data-tone='success'] {
+  color: var(--success);
+  background: var(--success-background);
+  border-color: var(--success-border);
+}
+.badge.status[data-tone='attention'] {
+  color: var(--warning);
+  background: var(--warning-background);
+  border-color: var(--warning-border);
+}
+.badge.status[data-tone='attention'][data-severity='error'] {
+  color: var(--error);
+  background: var(--error-background);
+  border-color: var(--error-border);
+}
 .badge.status-draft,
 .badge.status-paused,
 .badge.status-expired,
