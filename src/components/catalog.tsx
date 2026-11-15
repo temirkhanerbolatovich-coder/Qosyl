@@ -8,6 +8,11 @@ import { EmptyState, LoadState, PageHeading, ProjectCard, useData } from './plat
 import { Opportunities } from './opportunities';
 import { useI18n } from './locale-provider';
 
+function soonDate() {
+  const day = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  return day.toISOString().slice(0, 10);
+}
+
 export function HomeScreen({ localMode }: { localMode: boolean }) {
   const { locale, t } = useI18n();
   const categories = [
@@ -159,10 +164,6 @@ export function CatalogScreen() {
       label: t('Можно без опыта', 'Тәжірибесіз де болады'),
     },
   ];
-  function soonDate() {
-    const day = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    return day.toISOString().slice(0, 10);
-  }
   function togglePreset(key: string, value: string, active: boolean) {
     const form = new FormData();
     form.set(key, active ? '' : value);
