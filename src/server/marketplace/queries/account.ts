@@ -21,7 +21,7 @@ export async function accountQueries(params: URLSearchParams, user: User) {
             take: 1,
             select: { clientApprovedAt: true, studentApprovedAt: true },
           },
-          _count: { select: { applications: true } },
+          _count: { select: { applications: { where: { status: 'active' } } } },
         },
         take: 100,
       }),

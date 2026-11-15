@@ -902,12 +902,34 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
     });
     const studentPage = await pageFor(browser, student);
     const clientPage = await pageFor(browser, client);
+    await clientPage.goto('/client/projects');
+    const projectRow = clientPage.locator('article.project-row').filter({
+      has: clientPage.getByRole('link', { name: created.title, exact: true }),
+    });
+    const applicantsLink = projectRow.locator(`a[href="/client/projects/${id}/applications"]`);
+    await expect(applicantsLink).toHaveText('Откликов пока нет');
+
     await studentPage.goto(`/projects/${id}`);
     await studentPage
       .getByLabel('Коротко о себе и подходе')
       .fill('Готов выполнить этот учебный заказ и проверить оба согласованных критерия.');
     await studentPage.getByRole('button', { name: 'Отправить отклик бесплатно' }).click();
     await expect(studentPage.getByRole('status')).toContainText('Отклик отправлен');
+    await clientPage.reload();
+    await expect(applicantsLink).toHaveText('Отклики · 1');
+
+    await studentPage.getByRole('button', { name: 'Отозвать отклик' }).click();
+    await expect(studentPage.getByRole('status')).toContainText('Отклик отозван');
+    await clientPage.reload();
+    await expect(applicantsLink).toHaveText('Откликов пока нет');
+
+    await studentPage
+      .getByLabel('Коротко о себе и подходе')
+      .fill('Повторно откликаюсь на учебный заказ и проверю согласованные критерии.');
+    await studentPage.getByRole('button', { name: 'Отправить отклик бесплатно' }).click();
+    await expect(studentPage.getByRole('status')).toContainText('Отклик отправлен');
+    await clientPage.reload();
+    await expect(applicantsLink).toHaveText('Отклики · 1');
     await assertNoHorizontalOverflow(studentPage);
     await studentPage.screenshot({
       path: testInfo.outputPath('mobile-application.png'),

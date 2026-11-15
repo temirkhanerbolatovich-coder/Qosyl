@@ -38,6 +38,13 @@ function ProjectRow({ project, client = false }: { project: Project; client?: bo
     'completed',
     'disputed',
   ].includes(project.status);
+  const applicationCount = project._count?.applications;
+  const applicationsLabel =
+    applicationCount === undefined
+      ? copy('Отклики')
+      : applicationCount === 0
+        ? copy('Откликов пока нет')
+        : `${copy('Отклики')} · ${applicationCount}`;
   return (
     <article className="project-row">
       <div>
@@ -70,7 +77,7 @@ function ProjectRow({ project, client = false }: { project: Project; client?: bo
           {work
             ? copy('К работе')
             : client && project.status === 'published'
-              ? copy('Отклики')
+              ? applicationsLabel
               : copy('Открыть')}
           <ArrowRight size={14} />
         </Link>
