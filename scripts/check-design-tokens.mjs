@@ -20,7 +20,7 @@ const pairs = [
   ['action-text', 'surface', 4.5],
   ['action-text', 'background', 4.5],
   ['action-text', 'action-background', 4.5],
-  ['action-text', 'accent', 4.5],
+  ['action-text', 'surface-elevated', 4.5],
   ['action-foreground', 'action', 4.5],
   ['action-foreground', 'action-hover', 4.5],
   ['control-border', 'surface', 3],
