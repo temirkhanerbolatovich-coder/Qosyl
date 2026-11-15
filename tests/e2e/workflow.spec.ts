@@ -1586,11 +1586,13 @@ test.describe.serial('MVP на настоящем PostgreSQL', () => {
         )
         .click();
       await expect(panel.getByRole('heading', { name: 'Материалы: 0', exact: true })).toBeVisible();
+      if (queueSheet) await queueFilters.click();
       await opportunitySearch.locator('[name="category"]').selectOption('');
+      if (queueSheet) {
+        await opportunitySearch.getByRole('button', { name: /^Показать/ }).click();
+      }
       await opportunitySearch.locator('[name="q"]').fill('');
-      await opportunitySearch
-        .getByRole('button', { name: 'Найти возможности', exact: true })
-        .click();
+      await opportunitySearch.locator('[name="q"]').press('Enter');
       await expect(panel.locator('article').filter({ hasText: itemTitle })).toBeVisible();
 
       const input = {
