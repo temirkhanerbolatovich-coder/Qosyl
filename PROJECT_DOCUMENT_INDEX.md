@@ -4,6 +4,8 @@
 
 ## Текущее техническое обновление
 
+- [Qosyl Improvements: аудит, исследование, дизайн-система и план из 45 задач для исполнителя (15.11.2026)](docs/qosyl-improvements/README.md). Начинать с README этого каталога.
+
 - [Приватные лиды и обсуждения](docs/private-leads.md), [приёмка ручного этапа 5](docs/qa/private-leads.md), [ADR-006](11_Reports/Decisions/ADR-006-private-lead-handoff.md).
 
 - [Модерация и лента возможностей](docs/content-moderation.md), [приёмка этапа 4](docs/qa/content-moderation.md), [ADR-005](11_Reports/Decisions/ADR-005-content-publication.md).
