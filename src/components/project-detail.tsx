@@ -17,6 +17,7 @@ import {
   ActionFeedback,
   DemoBadge,
   LoadState,
+  ProjectNotFoundState,
   StatusBadge,
   useAction,
   useData,
@@ -70,7 +71,7 @@ export function ComplaintForm({
 export function ProjectDetailScreen({ id }: { id: string }) {
   const { locale, copy } = useMarketplaceCopy();
   const viewer = useViewer();
-  const { data, loading, error, refresh } = useData('project', { id });
+  const { data, loading, error, notFound, refresh } = useData('project', { id });
   const action = useAction(refresh);
   const [works, setWorks] = useState<ExternalWork[]>([]);
   useEffect(() => {
@@ -84,6 +85,12 @@ export function ProjectDetailScreen({ id }: { id: string }) {
     return (
       <div className="page-shell" lang={locale}>
         <LoadState />
+      </div>
+    );
+  if (notFound)
+    return (
+      <div className="page-shell" lang={locale}>
+        <ProjectNotFoundState />
       </div>
     );
   if (error || !data)

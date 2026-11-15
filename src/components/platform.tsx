@@ -13,6 +13,7 @@ import {
   MapPin,
   PauseCircle,
   RefreshCw,
+  SearchX,
   Send,
   ShieldAlert,
   ShieldCheck,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 import { date, money } from '@/lib/labels';
 import { getStatusDisplay } from '@/lib/status-display';
+import { ApiError, isNotFoundError } from '@/lib/api-error';
 import {
   localizedCategoryLabels,
   localizedModeLabels,
@@ -59,9 +61,15 @@ async function api<T>(
       signal: controller.signal,
       cache: 'no-store',
     });
-    const body = (await res.json().catch(() => null)) as { data?: T; error?: string } | null;
-    if (!res.ok || !body || !('data' in body))
-      throw new Error(body?.error ?? 'Не удалось получить данные. Повторите попытку.');
+    const body = (await res.json().catch(() => null)) as {
+      data?: T;
+      error?: string;
+      code?: string;
+    } | null;
+    if (!res.ok || !body || !('data' in body)) {
+      const message = body?.error ?? 'Не удалось получить данные. Повторите попытку.';
+      throw res.ok ? new Error(message) : new ApiError(message, res.status, body?.code);
+    }
     return body.data as T;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError')
@@ -88,18 +96,20 @@ export function useData<V extends PlatformView>(
     query: string;
     data: T | null;
     error: string;
+    notFound: boolean;
     loading: boolean;
-  }>({ query, data: null, error: '', loading: true });
+  }>({ query, data: null, error: '', notFound: false, loading: true });
   const refresh = useCallback(async () => {
     if (!enabled) return;
     try {
       const result = await api<T>(query);
-      setState({ query, data: result, error: '', loading: false });
+      setState({ query, data: result, error: '', notFound: false, loading: false });
     } catch (e) {
       setState((previous) => ({
         query,
         data: previous.query === query ? previous.data : null,
         error: e instanceof Error ? e.message : 'Произошла ошибка',
+        notFound: isNotFoundError(e),
         loading: false,
       }));
     }
@@ -109,7 +119,7 @@ export function useData<V extends PlatformView>(
     let active = true;
     void api<T>(query)
       .then((result) => {
-        if (active) setState({ query, data: result, error: '', loading: false });
+        if (active) setState({ query, data: result, error: '', notFound: false, loading: false });
       })
       .catch((e: unknown) => {
         if (active)
@@ -117,6 +127,7 @@ export function useData<V extends PlatformView>(
             query,
             data: null,
             error: e instanceof Error ? e.message : 'Произошла ошибка',
+            notFound: isNotFoundError(e),
             loading: false,
           });
       });
@@ -127,6 +138,8 @@ export function useData<V extends PlatformView>(
   return {
     data: state.query === query ? state.data : null,
     error: state.query === query ? state.error : '',
+    /** True only for a real HTTP 404 (closed, missing or not public), not for failures worth retrying. */
+    notFound: state.query === query ? state.notFound : false,
     loading: enabled && (state.query !== query || state.loading),
     refresh,
   };
@@ -207,6 +220,33 @@ export function LoadState({ error, retry }: { error?: string; retry?: () => void
       <div />
       <div />
       <div />
+    </div>
+  );
+}
+/** A closed or unpublished project is a normal outcome, not a failure: no retry, a way back instead. */
+export function ProjectNotFoundState() {
+  const { locale, t } = useI18n();
+  const viewer = useViewer();
+  return (
+    <div className="panel empty-state" lang={locale}>
+      <SearchX size={30} aria-hidden="true" />
+      <h2>{t('Проект закрыт или ещё не опубликован', 'Жоба жабылған немесе әлі жарияланбаған')}</h2>
+      <p className="muted">
+        {t(
+          'Срок отклика мог истечь, проект мог завершиться или ещё не пройти проверку модератора.',
+          'Өтінім беру мерзімі өтіп кетуі, жоба аяқталуы немесе әлі модератор тексерісінен өтпеуі мүмкін.',
+        )}
+      </p>
+      <div className="button-row">
+        <Link className="button" href="/projects">
+          {t('К каталогу проектов', 'Жобалар каталогына')}
+        </Link>
+        {!viewer && (
+          <Link className="text-link" href="/auth/login">
+            {t('Войти в аккаунт', 'Аккаунтқа кіру')}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
