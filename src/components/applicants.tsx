@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, ExternalLink } from 'lucide-react';
 import { date } from '@/lib/labels';
+import { avatarUrl } from '@/lib/avatar';
+import { ProfileAvatarImage } from './profile-avatar';
 import {
   ActionFeedback,
   EmptyState,
@@ -54,14 +56,50 @@ export function ApplicantsScreen({ id }: { id: string }) {
             <article className="panel" key={a.id}>
               <header className="applicant-header">
                 <div className="applicant-profile">
-                  <span className="avatar">{a.student?.name.slice(0, 1) ?? copy('С')}</span>
+                  <span className="applicant-avatar">
+                    <ProfileAvatarImage
+                      name={a.student.name}
+                      url={
+                        a.student.avatarRevision
+                          ? avatarUrl(a.student.id, a.student.avatarRevision)
+                          : undefined
+                      }
+                    />
+                  </span>
                   <div>
-                    <strong>{a.student?.name ?? copy('Исполнитель')}</strong>
+                    <strong lang="und">{a.student.name}</strong>
+                    {a.student.studentProfile?.headline && (
+                      <p lang="und">{a.student.studentProfile.headline}</p>
+                    )}
                     <p>
-                      {a.student?.studentProfile?.discipline ||
-                        copy('Студент / начинающий специалист')}
-                      {a.student?.studentProfile?.city ? ` · ${a.student.studentProfile.city}` : ''}
+                      {a.student.studentProfile?.discipline ? (
+                        <span lang="und">{a.student.studentProfile.discipline}</span>
+                      ) : (
+                        copy('Студент / начинающий специалист')
+                      )}
+                      {a.student.studentProfile?.city && (
+                        <>
+                          {' · '}
+                          <span lang="und">{a.student.studentProfile.city}</span>
+                        </>
+                      )}
                     </p>
+                    {(a.student.studentProfile?.institution ||
+                      a.student.studentProfile?.studyYear != null) && (
+                      <p>
+                        {a.student.studentProfile?.institution && (
+                          <span lang="und">{a.student.studentProfile.institution}</span>
+                        )}
+                        {a.student.studentProfile?.institution &&
+                        a.student.studentProfile?.studyYear != null
+                          ? ' · '
+                          : ''}
+                        {a.student.studentProfile?.studyYear != null &&
+                          (locale === 'kk'
+                            ? `${a.student.studentProfile.studyYear}-курс`
+                            : `${a.student.studentProfile.studyYear} курс`)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <StatusBadge status={a.status} />
@@ -73,6 +111,11 @@ export function ApplicantsScreen({ id }: { id: string }) {
                   </span>
                 ))}
               </div>
+              {a.student.confirmedWorks != null && (
+                <p className="muted small-text">
+                  {copy('Подтверждённые работы')} · {a.student.confirmedWorks}
+                </p>
+              )}
               <p className="applicant-message" lang="und">
                 {a.message}
               </p>
@@ -100,47 +143,63 @@ export function ApplicantsScreen({ id }: { id: string }) {
                   {a.student?.studentProfile?.weeklyHours ?? '—'} {copy('ч. в неделю')}
                 </span>
               </div>
-              {data.project.status === 'published' &&
-                a.status === 'active' &&
-                (confirmId === a.id ? (
-                  <div className="alert warning" style={{ display: 'block' }}>
-                    <p>
-                      {locale === 'kk' ? 'Орындаушыны тағайындау:' : 'Назначить'}{' '}
-                      <span lang="und">{a.student?.name ?? copy('Исполнитель')}</span>?{' '}
-                      {locale === 'kk'
-                        ? 'Шарттарды екі тарап та растауы керек.'
-                        : 'Условия ещё нужно будет подтвердить обеим сторонам.'}
-                    </p>
-                    <div className="button-row">
-                      <button
-                        className="button"
-                        disabled={action.busy}
-                        onClick={async () => {
-                          await action.run(
-                            'selectApplicant',
-                            { projectId: id, applicationId: a.id },
-                            'Исполнитель выбран. Теперь согласуйте условия.',
-                          );
-                          setConfirmId(null);
-                        }}
-                      >
-                        {copy('Подтвердить выбор')}
-                      </button>
-                      <button className="button secondary" onClick={() => setConfirmId(null)}>
-                        {copy('Отмена')}
-                      </button>
+              <div className="applicant-actions">
+                {data.project.status === 'published' &&
+                  a.status === 'active' &&
+                  (confirmId === a.id ? (
+                    <div className="alert warning" style={{ display: 'block' }}>
+                      <p>
+                        {locale === 'kk' ? 'Орындаушыны тағайындау:' : 'Назначить'}{' '}
+                        <span lang="und">{a.student?.name ?? copy('Исполнитель')}</span>?{' '}
+                        {locale === 'kk'
+                          ? 'Шарттарды екі тарап та растауы керек.'
+                          : 'Условия ещё нужно будет подтвердить обеим сторонам.'}
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="button"
+                          disabled={action.busy}
+                          onClick={async () => {
+                            await action.run(
+                              'selectApplicant',
+                              { projectId: id, applicationId: a.id },
+                              'Исполнитель выбран. Теперь согласуйте условия.',
+                            );
+                            setConfirmId(null);
+                          }}
+                        >
+                          {copy('Подтвердить выбор')}
+                        </button>
+                        <button className="button secondary" onClick={() => setConfirmId(null)}>
+                          {copy('Отмена')}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <button className="button" onClick={() => setConfirmId(a.id)}>
+                      {copy('Выбрать исполнителя')}
+                    </button>
+                  ))}
+                {a.status === 'selected' && (
+                  <Link className="button" href={`/work/${id}`}>
+                    {copy('Перейти к согласованию')}
+                  </Link>
+                )}
+                {a.student.profileAvailable ? (
+                  <Link
+                    className="button secondary applicant-profile-action"
+                    href={`/talent/${encodeURIComponent(a.student.id)}`}
+                  >
+                    {copy('Открыть профиль')}
+                  </Link>
                 ) : (
-                  <button className="button" onClick={() => setConfirmId(a.id)}>
-                    {copy('Выбрать исполнителя')}
-                  </button>
-                ))}
-              {a.status === 'selected' && (
-                <Link className="button" href={`/work/${id}`}>
-                  {copy('Перейти к согласованию')}
-                </Link>
-              )}
+                  <p className="muted small-text applicant-profile-action">
+                    {a.student.studentProfile?.isPublic === false
+                      ? copy('Профиль скрыт исполнителем')
+                      : copy('Профиль недоступен')}
+                  </p>
+                )}
+              </div>
             </article>
           ))}
         </div>

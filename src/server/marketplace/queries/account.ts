@@ -1,6 +1,7 @@
 import { publicCaseWhere, caseOrder } from '@/lib/portfolio-case';
 import 'server-only';
 import { visibleStudentProfile } from '@/lib/profile-visibility';
+import { config } from '@/lib/config';
 import { Prisma, type User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { assert } from '@/lib/permissions';
@@ -133,24 +134,69 @@ export async function accountQueries(params: URLSearchParams, user: User) {
             id: true,
             name: true,
             demo: true,
+            status: true,
             studentProfile: true,
+            avatar: { select: { isPublic: true, revision: true } },
             externalWorks: { where: publicCaseWhere, orderBy: caseOrder },
           },
         },
       },
       orderBy: { createdAt: 'asc' },
     });
+    const publicStudentIds = [
+      ...new Set(
+        applications.flatMap(({ student }) =>
+          student.status === 'active' &&
+          student.studentProfile?.isPublic &&
+          (!student.demo || config.demoEnabled)
+            ? [student.id]
+            : [],
+        ),
+      ),
+    ];
+    const publishedRecords = publicStudentIds.length
+      ? await db.portfolioRecord.findMany({
+          where: {
+            studentId: { in: publicStudentIds },
+            visibility: { in: ['public', 'redacted_public'] },
+            clientConsentAt: { not: null },
+            studentConsentAt: { not: null },
+            project: {
+              status: { in: ['accepted', 'completed'] },
+              events: { some: { action: 'acceptSubmission' } },
+              ...(config.demoEnabled ? {} : { demo: false }),
+            },
+          },
+          select: { studentId: true, project: { select: { assignedStudentId: true } } },
+        })
+      : [];
+    const confirmedCounts = new Map<string, number>();
+    for (const record of publishedRecords) {
+      if (record.project.assignedStudentId !== record.studentId) continue;
+      confirmedCounts.set(record.studentId, (confirmedCounts.get(record.studentId) ?? 0) + 1);
+    }
     return {
       project,
-      applications: applications.map((application) => ({
-        ...application,
-        student: {
-          ...application.student,
-          studentProfile: application.student.studentProfile
-            ? visibleStudentProfile(application.student.studentProfile)
-            : null,
-        },
-      })),
+      applications: applications.map((application) => {
+        const { status, avatar, ...student } = application.student;
+        const profileAvailable = Boolean(
+          status === 'active' &&
+          student.studentProfile?.isPublic &&
+          (!student.demo || config.demoEnabled),
+        );
+        return {
+          ...application,
+          student: {
+            ...student,
+            studentProfile: student.studentProfile
+              ? visibleStudentProfile(student.studentProfile)
+              : null,
+            profileAvailable,
+            avatarRevision: profileAvailable && avatar?.isPublic ? avatar.revision : null,
+            confirmedWorks: profileAvailable ? (confirmedCounts.get(student.id) ?? 0) : null,
+          },
+        };
+      }),
     };
   }
   throw new Error('Unsupported query dispatch');

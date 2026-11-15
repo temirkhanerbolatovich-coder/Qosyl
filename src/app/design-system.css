@@ -316,6 +316,43 @@ summary:focus-visible {
 .badge svg {
   flex-shrink: 0;
 }
+.applicant-avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.applicant-avatar > img,
+.applicant-avatar > .avatar {
+  width: 44px;
+  height: 44px;
+}
+.applicant-actions {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+.applicant-actions > .alert {
+  flex: 1 1 100%;
+}
+.applicant-profile-action {
+  margin-right: auto;
+}
+@media (max-width: 599px) {
+  .applicant-actions,
+  .applicant-actions .button-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .applicant-actions .button {
+    width: 100%;
+  }
+  .applicant-profile-action {
+    margin-right: 0;
+  }
+}
 .badge.status[data-tone='neutral'] {
   color: var(--text-secondary);
   background: var(--surface-elevated);

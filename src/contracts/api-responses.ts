@@ -104,6 +104,9 @@ export const workDataSchema = z.strictObject({
 export const applicantSchema = demoPersonSchema.extend({
   studentProfile: studentProfileSchema.nullable(),
   externalWorks: z.array(externalWorkSchema),
+  profileAvailable: z.boolean(),
+  avatarRevision: z.string().nullable(),
+  confirmedWorks: count.nullable(),
 });
 export const applicantApplicationSchema = applicationSchema.extend({ student: applicantSchema });
 export const applicationsDataSchema = z.strictObject({
